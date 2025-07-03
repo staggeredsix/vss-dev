@@ -27,11 +27,13 @@ def extract_media(video_path: str | os.PathLike):
 
     tmpdir = tempfile.mkdtemp()
     audio_path = os.path.join(tmpdir, "audio.wav")
+
     frames_dir = os.path.join(tmpdir, "frames")
     os.makedirs(frames_dir, exist_ok=True)
 
+
     try:
-        subprocess.run(
+        res = subprocess.run(
             [
                 "ffmpeg",
                 "-i",
@@ -92,10 +94,12 @@ class GradioApp:
 
     def answer(self, question, history):
         if not self.transcript:
+
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": "Upload a video first."})
             return history
         response = self.pipeline.answer(question, self.transcript, self.captions)
+
         ts_match = re.search(r"(\d{1,2}:\d{2})", response)
         if ts_match:
             mmss = ts_match.group(1)

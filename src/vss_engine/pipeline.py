@@ -19,6 +19,7 @@ class LocalPipeline:
         with open(image_path, "rb") as img:
             img_b64 = base64.b64encode(img.read()).decode()
 
+
         resp = requests.post(
             f"{self.ollama_url}/api/generate",
             json={
@@ -26,6 +27,7 @@ class LocalPipeline:
                 "prompt": "Describe this image.",
                 "images": [img_b64],
                 "stream": False,
+
             },
         )
         resp.raise_for_status()
