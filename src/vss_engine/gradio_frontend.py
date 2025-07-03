@@ -13,9 +13,9 @@ import gradio as gr
 # Allow importing pipeline when executed from repository root
 sys_path = Path(__file__).resolve().parent
 import sys
+
 sys.path.append(str(sys_path))
 from pipeline import LocalPipeline
-
 
 
 def extract_media(video_path: str | os.PathLike):
@@ -29,9 +29,8 @@ def extract_media(video_path: str | os.PathLike):
     audio_path = os.path.join(tmpdir, "audio.wav")
     frame_path = os.path.join(tmpdir, "frame.jpg")
 
-
     try:
-        subprocess.run(
+        res = subprocess.run(
             [
                 "ffmpeg",
                 "-i",
@@ -46,8 +45,9 @@ def extract_media(video_path: str | os.PathLike):
                 audio_path,
             ],
             check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
 
         subprocess.run(
@@ -62,12 +62,13 @@ def extract_media(video_path: str | os.PathLike):
                 frame_path,
             ],
             check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"ffmpeg failed: {e}") from e
-
+        msg = e.stderr.strip() if e.stderr else str(e)
+        raise RuntimeError(f"ffmpeg failed: {msg}") from e
 
     return audio_path, frame_path, tmpdir
 
@@ -88,7 +89,9 @@ class GradioApp:
 
     def answer(self, question, history):
         if not self.transcript:
-            return history + [[question, "Upload a video first."],]
+            return history + [
+                [question, "Upload a video first."],
+            ]
         response = self.pipeline.answer(question, self.transcript)
         ts_match = re.search(r"(\d{1,2}:\d{2})", response)
         if ts_match:
@@ -106,7 +109,7 @@ class GradioApp:
             video = gr.Video(label="Video", elem_id="video")
             transcript_box = gr.Textbox(label="Transcript")
             caption_box = gr.Textbox(label="Caption")
-            chatbot = gr.Chatbot()
+            chatbot = gr.Chatbot(type="messages")
             question = gr.Textbox(label="Question")
             send = gr.Button("Ask")
 
