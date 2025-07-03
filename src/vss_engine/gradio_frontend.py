@@ -19,11 +19,13 @@ from pipeline import LocalPipeline
 
 
 def extract_media(video_path: str | os.PathLike):
+
     """Extract audio (if present) and all frames using ffmpeg.
 
     Returns a tuple ``(audio_path, frame_paths, tmpdir)`` where ``audio_path``
     may be ``None`` if no audio track was found.
     """
+
     if not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg is required but not installed")
 
@@ -31,11 +33,13 @@ def extract_media(video_path: str | os.PathLike):
 
     tmpdir = tempfile.mkdtemp()
     audio_path = os.path.join(tmpdir, "audio.wav")
+
     frames_dir = os.path.join(tmpdir, "frames")
     os.makedirs(frames_dir, exist_ok=True)
 
     try:
         audio_proc = subprocess.run(
+
             [
                 "ffmpeg",
                 "-i",
@@ -49,7 +53,9 @@ def extract_media(video_path: str | os.PathLike):
                 "1",
                 audio_path,
             ],
+
             check=False,
+
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -60,10 +66,12 @@ def extract_media(video_path: str | os.PathLike):
                 "ffmpeg",
                 "-i",
                 video_path,
+
                 "-vf",
                 "scale=224:224",
                 "-vsync",
                 "0",
+
                 os.path.join(frames_dir, "frame_%05d.jpg"),
             ],
             check=True,
@@ -98,17 +106,22 @@ class GradioApp:
             return "", ""
         audio, self.frames, tmp = extract_media(video_file)
         self.transcript = self.pipeline.transcribe(audio)
+
         self.captions = self.pipeline.caption_frames(self.frames)
+
         caption = self.captions[0] if self.captions else ""
         # cleanup tmpdir later
         return self.transcript, caption
 
     def answer(self, question, history):
+
         if not self.frames:
+
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": "Upload a video first."})
             return history
         response = self.pipeline.answer(question, self.transcript, self.captions)
+
         ts_match = re.search(r"(\d{1,2}:\d{2})", response)
         if ts_match:
             mmss = ts_match.group(1)

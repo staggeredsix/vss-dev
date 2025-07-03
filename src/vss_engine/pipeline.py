@@ -28,10 +28,12 @@ class LocalPipeline:
                 "prompt": "Describe this image.",
                 "images": [img_b64],
                 "stream": False,
+
             },
         )
         resp.raise_for_status()
         return resp.json().get("response", "")
+
 
     def caption_frames(self, image_paths: list[str]) -> list[str]:
         """Caption images in batches of five frames."""
@@ -61,6 +63,7 @@ class LocalPipeline:
                 batch_caps.extend([""] * (len(batch) - len(batch_caps)))
             captions.extend(batch_caps[: len(batch)])
         return captions
+
 
     def rerank(self, query: str, docs: list[str]):
         results = []
