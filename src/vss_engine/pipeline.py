@@ -18,7 +18,9 @@ class LocalPipeline:
             resp = requests.post(
                 f"{self.ollama_url}/api/generate",
                 json={
+
                     "model": "llava-llama3:8b",
+
                     "prompt": "Describe this image.",
                     "images": [image_path],
                 },
@@ -32,12 +34,15 @@ class LocalPipeline:
             prompt = f"Query: {query}\nDocument: {doc}\nScore 0-1:"
             resp = requests.post(
                 f"{self.ollama_url}/api/generate",
+
                 json={"model": "dengcao/Qwen3-Reranker-8B:Q5_K_M", "prompt": prompt},
+
             )
             resp.raise_for_status()
             score = float(resp.json().get("response", "0").strip())
             results.append((doc, score))
         return sorted(results, key=lambda x: x[1], reverse=True)
+
 
     def answer(self, question: str, transcript: str) -> str:
         """Generate an answer from the video transcript."""
@@ -54,6 +59,7 @@ class LocalPipeline:
 
 
 if __name__ == "__main__":
+
     import argparse
 
     parser = argparse.ArgumentParser(description="Run local VSS pipeline")
@@ -67,6 +73,7 @@ if __name__ == "__main__":
     print("Transcript:", transcript)
 
     caption = pipe.caption(args.image)
+
     print("Caption:", caption)
 
     docs = ["doc one", "another document"]
