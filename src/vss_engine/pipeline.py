@@ -25,7 +25,9 @@ class LocalPipeline:
                 "model": "llava-llama3:8b",
                 "prompt": "Describe this image.",
                 "images": [img_b64],
+
                 "stream": False,
+
             },
         )
         resp.raise_for_status()

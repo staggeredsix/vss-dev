@@ -30,7 +30,7 @@ def extract_media(video_path: str | os.PathLike):
     frame_path = os.path.join(tmpdir, "frame.jpg")
 
     try:
-        subprocess.run(
+        res = subprocess.run(
             [
                 "ffmpeg",
                 "-i",
