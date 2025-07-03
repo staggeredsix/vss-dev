@@ -1,5 +1,6 @@
 import requests
 import whisper
+import base64
 
 
 class LocalPipeline:
@@ -14,17 +15,19 @@ class LocalPipeline:
         return result.get("text", "")
 
     def caption(self, image_path: str) -> str:
+        """Generate an image caption using the local VLM."""
         with open(image_path, "rb") as img:
-            resp = requests.post(
-                f"{self.ollama_url}/api/generate",
-                json={
+            img_b64 = base64.b64encode(img.read()).decode()
 
-                    "model": "llava-llama3:8b",
-
-                    "prompt": "Describe this image.",
-                    "images": [image_path],
-                },
-            )
+        resp = requests.post(
+            f"{self.ollama_url}/api/generate",
+            json={
+                "model": "llava-llama3:8b",
+                "prompt": "Describe this image.",
+                "images": [img_b64],
+                "stream": False,
+            },
+        )
         resp.raise_for_status()
         return resp.json().get("response", "")
 
@@ -34,9 +37,11 @@ class LocalPipeline:
             prompt = f"Query: {query}\nDocument: {doc}\nScore 0-1:"
             resp = requests.post(
                 f"{self.ollama_url}/api/generate",
-
-                json={"model": "dengcao/Qwen3-Reranker-8B:Q5_K_M", "prompt": prompt},
-
+                json={
+                    "model": "dengcao/Qwen3-Reranker-8B:Q5_K_M",
+                    "prompt": prompt,
+                    "stream": False,
+                },
             )
             resp.raise_for_status()
             score = float(resp.json().get("response", "0").strip())
@@ -52,7 +57,11 @@ class LocalPipeline:
         )
         resp = requests.post(
             f"{self.ollama_url}/api/generate",
-            json={"model": "llava-llama3:8b", "prompt": prompt},
+            json={
+                "model": "llava-llama3:8b",
+                "prompt": prompt,
+                "stream": False,
+            },
         )
         resp.raise_for_status()
         return resp.json().get("response", "")
