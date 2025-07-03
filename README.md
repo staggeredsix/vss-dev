@@ -121,8 +121,10 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
 ### Local Setup with Ollama + Whisper
 
 
-1. Install PyTorch with CUDA 12.8 support and Whisper from source:
+1. Install ffmpeg and PyTorch with CUDA 12.8 support, then Whisper from source:
    ```bash
+   # ffmpeg is required for audio and frame extraction
+   sudo apt-get install ffmpeg  # or use brew on macOS
    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
    pip3 install git+https://github.com/openai/whisper.git
 

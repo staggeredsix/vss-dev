@@ -8,6 +8,7 @@ PORT=51234
 pip3 install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 pip3 install -q git+https://github.com/openai/whisper.git
 
+
 # Start Ollama on the chosen port in the background
 if ! command -v ollama >/dev/null 2>&1; then
   echo "Ollama is not installed. Please install it first." >&2

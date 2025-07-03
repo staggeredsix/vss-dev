@@ -1,6 +1,9 @@
 import argparse
 import os
 import re
+
+import shutil
+
 import subprocess
 import tempfile
 from pathlib import Path
@@ -14,36 +17,57 @@ sys.path.append(str(sys_path))
 from pipeline import LocalPipeline
 
 
-def extract_media(video_path: str):
+
+def extract_media(video_path: str | os.PathLike):
     """Extract audio and a representative frame using ffmpeg."""
+    if not shutil.which("ffmpeg"):
+        raise RuntimeError("ffmpeg is required but not installed")
+
+    video_path = os.fspath(video_path)
+
     tmpdir = tempfile.mkdtemp()
     audio_path = os.path.join(tmpdir, "audio.wav")
     frame_path = os.path.join(tmpdir, "frame.jpg")
 
-    subprocess.run([
-        "ffmpeg",
-        "-i",
-        video_path,
-        "-vn",
-        "-acodec",
-        "pcm_s16le",
-        "-ar",
-        "16000",
-        "-ac",
-        "1",
-        audio_path,
-    ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    subprocess.run([
-        "ffmpeg",
-        "-i",
-        video_path,
-        "-vf",
-        "select=eq(n\\,0)",
-        "-vframes",
-        "1",
-        frame_path,
-    ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-i",
+                video_path,
+                "-vn",
+                "-acodec",
+                "pcm_s16le",
+                "-ar",
+                "16000",
+                "-ac",
+                "1",
+                audio_path,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-i",
+                video_path,
+                "-vf",
+                "select=eq(n\\,0)",
+                "-vframes",
+                "1",
+                frame_path,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"ffmpeg failed: {e}") from e
+
 
     return audio_path, frame_path, tmpdir
 
