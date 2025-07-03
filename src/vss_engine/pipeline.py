@@ -18,7 +18,9 @@ class LocalPipeline:
             resp = requests.post(
                 f"{self.ollama_url}/api/generate",
                 json={
-                    "model": "llava-llama3:instruct",
+
+                    "model": "llava-llama3:8b",
+
                     "prompt": "Describe this image.",
                     "images": [image_path],
                 },
@@ -32,7 +34,9 @@ class LocalPipeline:
             prompt = f"Query: {query}\nDocument: {doc}\nScore 0-1:"
             resp = requests.post(
                 f"{self.ollama_url}/api/generate",
-                json={"model": "dengcao/Qwen3-Reranker-0.6B", "prompt": prompt},
+
+                json={"model": "dengcao/Qwen3-Reranker-8B:Q5_K_M", "prompt": prompt},
+
             )
             resp.raise_for_status()
             score = float(resp.json().get("response", "0").strip())

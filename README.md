@@ -120,9 +120,11 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
 
 ### Local Setup with Ollama + Whisper
 
-1. Install Whisper from source for compatibility with the latest PyTorch:
+
+1. Install PyTorch with CUDA 12.8 support and Whisper from source:
    ```bash
-   pip install git+https://github.com/openai/whisper.git
+   pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+   pip3 install git+https://github.com/openai/whisper.git
 
    ```
 
@@ -143,13 +145,13 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
    ./run_local.sh
    ```
 
-   This helper installs Whisper from source, starts Ollama on port 51234, pulls models, and runs the pipeline.
-
+   This helper installs the required PyTorch build and Whisper, starts Ollama on port 51234, pulls models, and runs the pipeline.
 
 3. Pull models:
    ```bash
-   ollama pull llava-llama3:instruct
-   ollama pull dengcao/Qwen3-Reranker-0.6B
+   ollama pull llava-llama3:8b
+   ollama pull dengcao/Qwen3-Reranker-8B:Q5_K_M
+
    ```
 
 4. Run the pipeline:
