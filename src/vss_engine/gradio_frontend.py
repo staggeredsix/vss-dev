@@ -19,7 +19,7 @@ from pipeline import LocalPipeline
 
 
 def extract_media(video_path: str | os.PathLike):
-    """Extract audio and a representative frame using ffmpeg."""
+    """Extract audio and all frames using ffmpeg."""
     if not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg is required but not installed")
 
@@ -27,7 +27,10 @@ def extract_media(video_path: str | os.PathLike):
 
     tmpdir = tempfile.mkdtemp()
     audio_path = os.path.join(tmpdir, "audio.wav")
-    frame_path = os.path.join(tmpdir, "frame.jpg")
+
+    frames_dir = os.path.join(tmpdir, "frames")
+    os.makedirs(frames_dir, exist_ok=True)
+
 
     try:
         res = subprocess.run(
@@ -55,11 +58,7 @@ def extract_media(video_path: str | os.PathLike):
                 "ffmpeg",
                 "-i",
                 video_path,
-                "-vf",
-                "select=eq(n\\,0)",
-                "-vframes",
-                "1",
-                frame_path,
+                os.path.join(frames_dir, "frame_%05d.jpg"),
             ],
             check=True,
             stdout=subprocess.PIPE,
@@ -70,29 +69,37 @@ def extract_media(video_path: str | os.PathLike):
         msg = e.stderr.strip() if e.stderr else str(e)
         raise RuntimeError(f"ffmpeg failed: {msg}") from e
 
-    return audio_path, frame_path, tmpdir
+    frame_paths = sorted(
+        str(p) for p in Path(frames_dir).glob("frame_*.jpg")
+    )
+    return audio_path, frame_paths, tmpdir
 
 
 class GradioApp:
     def __init__(self, ollama_url: str):
         self.pipeline = LocalPipeline(ollama_url)
         self.transcript = ""
+        self.frames: list[str] = []
+        self.captions: list[str] = []
 
     def process_upload(self, video_file):
         if video_file is None:
             return "", ""
-        audio, frame, tmp = extract_media(video_file)
+        audio, self.frames, tmp = extract_media(video_file)
         self.transcript = self.pipeline.transcribe(audio)
-        caption = self.pipeline.caption(frame)
+        self.captions = [self.pipeline.caption(f) for f in self.frames]
+        caption = self.captions[0] if self.captions else ""
         # cleanup tmpdir later
         return self.transcript, caption
 
     def answer(self, question, history):
         if not self.transcript:
-            return history + [
-                [question, "Upload a video first."],
-            ]
-        response = self.pipeline.answer(question, self.transcript)
+
+            history.append({"role": "user", "content": question})
+            history.append({"role": "assistant", "content": "Upload a video first."})
+            return history
+        response = self.pipeline.answer(question, self.transcript, self.captions)
+
         ts_match = re.search(r"(\d{1,2}:\d{2})", response)
         if ts_match:
             mmss = ts_match.group(1)
@@ -100,7 +107,8 @@ class GradioApp:
             sec = m * 60 + s
             link = f'<a href="#" onclick="document.getElementById(\'video\').currentTime={sec}; return false;">{mmss}</a>'
             response = response.replace(mmss, link)
-        history.append([question, response])
+        history.append({"role": "user", "content": question})
+        history.append({"role": "assistant", "content": response})
         return history
 
     def launch(self):

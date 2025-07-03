@@ -19,13 +19,13 @@ class LocalPipeline:
         with open(image_path, "rb") as img:
             img_b64 = base64.b64encode(img.read()).decode()
 
+
         resp = requests.post(
             f"{self.ollama_url}/api/generate",
             json={
                 "model": "llava-llama3:8b",
                 "prompt": "Describe this image.",
                 "images": [img_b64],
-
                 "stream": False,
 
             },
@@ -51,10 +51,15 @@ class LocalPipeline:
         return sorted(results, key=lambda x: x[1], reverse=True)
 
 
-    def answer(self, question: str, transcript: str) -> str:
-        """Generate an answer from the video transcript."""
+    def answer(
+        self, question: str, transcript: str, captions: list[str] | None = None
+    ) -> str:
+        """Generate an answer using the transcript and frame captions."""
+        caption_text = "\n".join(captions or [])
         prompt = (
-            f"Video transcript:\n{transcript}\n\nQuestion: {question}\n"
+            f"Video transcript:\n{transcript}\n"
+            f"Frame captions:\n{caption_text}\n\n"
+            f"Question: {question}\n"
             "Answer the question and include the timestamp in mm:ss if relevant."
         )
         resp = requests.post(
