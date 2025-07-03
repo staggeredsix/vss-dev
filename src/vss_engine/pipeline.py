@@ -25,6 +25,9 @@ class LocalPipeline:
                 "model": "llava-llama3:8b",
                 "prompt": "Describe this image.",
                 "images": [img_b64],
+
+                "stream": False,
+
             },
         )
         resp.raise_for_status()
@@ -36,9 +39,11 @@ class LocalPipeline:
             prompt = f"Query: {query}\nDocument: {doc}\nScore 0-1:"
             resp = requests.post(
                 f"{self.ollama_url}/api/generate",
-
-                json={"model": "dengcao/Qwen3-Reranker-8B:Q5_K_M", "prompt": prompt},
-
+                json={
+                    "model": "dengcao/Qwen3-Reranker-8B:Q5_K_M",
+                    "prompt": prompt,
+                    "stream": False,
+                },
             )
             resp.raise_for_status()
             score = float(resp.json().get("response", "0").strip())
@@ -54,7 +59,11 @@ class LocalPipeline:
         )
         resp = requests.post(
             f"{self.ollama_url}/api/generate",
-            json={"model": "llava-llama3:8b", "prompt": prompt},
+            json={
+                "model": "llava-llama3:8b",
+                "prompt": prompt,
+                "stream": False,
+            },
         )
         resp.raise_for_status()
         return resp.json().get("response", "")
