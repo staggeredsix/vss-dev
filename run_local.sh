@@ -3,9 +3,11 @@
 set -euo pipefail
 
 PORT=51234
+
 # Install PyTorch for GPUs using CUDA 12.8 and Whisper from source
 pip3 install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 pip3 install -q git+https://github.com/openai/whisper.git
+
 
 
 # Start Ollama on the chosen port in the background
@@ -27,8 +29,10 @@ done
 echo "Ollama running on port ${PORT}"
 
 # Pull required models
+
 ollama pull llava-llama3:8b
 ollama pull dengcao/Qwen3-Reranker-8B:Q5_K_M
+
 
 # Run the Python pipeline using the same port
 python src/vss_engine/pipeline.py --ollama-url "http://localhost:${PORT}"
