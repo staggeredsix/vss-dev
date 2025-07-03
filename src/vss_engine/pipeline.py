@@ -41,12 +41,21 @@ class LocalPipeline:
 
 
 if __name__ == "__main__":
-    pipe = LocalPipeline()
-    # Example usage; replace with your own paths and documents
-    transcript = pipe.transcribe("audio.wav")
+
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run local VSS pipeline")
+    parser.add_argument("--ollama-url", default="http://localhost:11434", help="Base URL for Ollama server")
+    parser.add_argument("--audio", default="audio.wav", help="Path to audio file")
+    parser.add_argument("--image", default="frame.jpg", help="Path to image file")
+    args = parser.parse_args()
+
+    pipe = LocalPipeline(args.ollama_url)
+    transcript = pipe.transcribe(args.audio)
     print("Transcript:", transcript)
 
-    caption = pipe.caption("frame.jpg")
+    caption = pipe.caption(args.image)
+
     print("Caption:", caption)
 
     docs = ["doc one", "another document"]

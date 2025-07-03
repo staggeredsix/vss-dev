@@ -136,6 +136,14 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
    docker-compose up -d
    ```
 
+
+   Or run the helper script:
+   ```bash
+   ./run_local.sh
+   ```
+   This starts Ollama on port 51234, pulls models, and runs the pipeline.
+
+
 3. Pull models:
    ```bash
    ollama pull llava-llama3:instruct
