@@ -3,6 +3,7 @@
 set -euo pipefail
 
 PORT=51234
+
 # Ensure whisper is installed from source
 pip install -q git+https://github.com/openai/whisper.git
 

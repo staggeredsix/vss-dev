@@ -41,6 +41,7 @@ class LocalPipeline:
 
 
 if __name__ == "__main__":
+
     import argparse
 
     parser = argparse.ArgumentParser(description="Run local VSS pipeline")
@@ -54,6 +55,7 @@ if __name__ == "__main__":
     print("Transcript:", transcript)
 
     caption = pipe.caption(args.image)
+
     print("Caption:", caption)
 
     docs = ["doc one", "another document"]

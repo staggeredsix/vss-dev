@@ -123,6 +123,7 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
 1. Install Whisper from source for compatibility with the latest PyTorch:
    ```bash
    pip install git+https://github.com/openai/whisper.git
+
    ```
 
 2. Install and start Ollama:
@@ -136,11 +137,14 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
    docker-compose up -d
    ```
 
+
    Or run the helper script:
    ```bash
    ./run_local.sh
    ```
+
    This helper installs Whisper from source, starts Ollama on port 51234, pulls models, and runs the pipeline.
+
 
 3. Pull models:
    ```bash
