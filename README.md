@@ -120,12 +120,14 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
 
 ### Local Setup with Ollama + Whisper
 
+
 1. Install ffmpeg and PyTorch with CUDA 12.8 support, then Whisper from source:
    ```bash
    # ffmpeg is required for audio and frame extraction
    sudo apt-get install ffmpeg  # or use brew on macOS
    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
    pip3 install git+https://github.com/openai/whisper.git
+
    ```
 
 2. Install and start Ollama:
@@ -139,16 +141,19 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
    docker-compose up -d
    ```
 
+
    Or run the helper script:
    ```bash
   ./run_local.sh
   ```
   This helper installs the required PyTorch build and Whisper, starts Ollama on port 51234, pulls models, and launches the Gradio interface.
 
+
 3. Pull models:
    ```bash
    ollama pull llava-llama3:8b
    ollama pull dengcao/Qwen3-Reranker-8B:Q5_K_M
+
    ```
 
 4. Launch the Gradio interface (or use `run_local.sh`):
@@ -157,6 +162,7 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
    ```
    This uses Whisper for ASR, LLaVA for image captioning, and Qwen for reranking.
    When the model response includes a timestamp, click it to jump to that time in the video.
+
 ## Known CVEs
 
 VSS Engine 2.3.0 Container has the following known CVEs:

@@ -3,6 +3,7 @@
 set -euo pipefail
 
 PORT=51234
+
 # Install PyTorch for GPUs using CUDA 12.8 and Whisper from source
 pip3 install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 pip3 install -q git+https://github.com/openai/whisper.git
@@ -27,11 +28,13 @@ done
 echo "Ollama running on port ${PORT}"
 
 # Pull required models
+
 ollama pull llava-llama3:8b
 ollama pull dengcao/Qwen3-Reranker-8B:Q5_K_M
 
 # Launch the Gradio frontend using the same port
 python src/vss_engine/gradio_frontend.py --ollama-url "http://localhost:${PORT}"
+
 
 # Stop Ollama
 kill $OLLAMA_PID

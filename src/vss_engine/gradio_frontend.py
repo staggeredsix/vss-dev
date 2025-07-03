@@ -1,7 +1,9 @@
 import argparse
 import os
 import re
+
 import shutil
+
 import subprocess
 import tempfile
 from pathlib import Path
@@ -15,15 +17,18 @@ sys.path.append(str(sys_path))
 from pipeline import LocalPipeline
 
 
+
 def extract_media(video_path: str | os.PathLike):
     """Extract audio and a representative frame using ffmpeg."""
     if not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg is required but not installed")
 
     video_path = os.fspath(video_path)
+
     tmpdir = tempfile.mkdtemp()
     audio_path = os.path.join(tmpdir, "audio.wav")
     frame_path = os.path.join(tmpdir, "frame.jpg")
+
 
     try:
         subprocess.run(
@@ -62,6 +67,7 @@ def extract_media(video_path: str | os.PathLike):
         )
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"ffmpeg failed: {e}") from e
+
 
     return audio_path, frame_path, tmpdir
 
