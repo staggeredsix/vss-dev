@@ -142,10 +142,10 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
 
    Or run the helper script:
    ```bash
-   ./run_local.sh
-   ```
+  ./run_local.sh
+  ```
+  This helper installs the required PyTorch build and Whisper, starts Ollama on port 51234, pulls models, and launches the Gradio interface.
 
-   This helper installs the required PyTorch build and Whisper, starts Ollama on port 51234, pulls models, and runs the pipeline.
 
 3. Pull models:
    ```bash
@@ -154,11 +154,13 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
 
    ```
 
-4. Run the pipeline:
+4. Launch the Gradio interface (or use `run_local.sh`):
    ```bash
-   python src/vss_engine/pipeline.py
+   python src/vss_engine/gradio_frontend.py
    ```
    This uses Whisper for ASR, LLaVA for image captioning, and Qwen for reranking.
+   When the model response includes a timestamp, click it to jump to that time in the video.
+
 ## Known CVEs
 
 VSS Engine 2.3.0 Container has the following known CVEs:

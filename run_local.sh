@@ -8,8 +8,6 @@ PORT=51234
 pip3 install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 pip3 install -q git+https://github.com/openai/whisper.git
 
-
-
 # Start Ollama on the chosen port in the background
 if ! command -v ollama >/dev/null 2>&1; then
   echo "Ollama is not installed. Please install it first." >&2
@@ -33,9 +31,9 @@ echo "Ollama running on port ${PORT}"
 ollama pull llava-llama3:8b
 ollama pull dengcao/Qwen3-Reranker-8B:Q5_K_M
 
+# Launch the Gradio frontend using the same port
+python src/vss_engine/gradio_frontend.py --ollama-url "http://localhost:${PORT}"
 
-# Run the Python pipeline using the same port
-python src/vss_engine/pipeline.py --ollama-url "http://localhost:${PORT}"
 
 # Stop Ollama
 kill $OLLAMA_PID

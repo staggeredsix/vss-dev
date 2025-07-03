@@ -44,6 +44,20 @@ class LocalPipeline:
         return sorted(results, key=lambda x: x[1], reverse=True)
 
 
+    def answer(self, question: str, transcript: str) -> str:
+        """Generate an answer from the video transcript."""
+        prompt = (
+            f"Video transcript:\n{transcript}\n\nQuestion: {question}\n"
+            "Answer the question and include the timestamp in mm:ss if relevant."
+        )
+        resp = requests.post(
+            f"{self.ollama_url}/api/generate",
+            json={"model": "llava-llama3:8b", "prompt": prompt},
+        )
+        resp.raise_for_status()
+        return resp.json().get("response", "")
+
+
 if __name__ == "__main__":
 
     import argparse
