@@ -13,13 +13,17 @@ import gradio as gr
 # Allow importing pipeline when executed from repository root
 sys_path = Path(__file__).resolve().parent
 import sys
+
 sys.path.append(str(sys_path))
 from pipeline import LocalPipeline
 
 
-
 def extract_media(video_path: str | os.PathLike):
-    """Extract audio and a representative frame using ffmpeg."""
+    """Extract audio (if present) and all frames using ffmpeg.
+
+    Returns a tuple ``(audio_path, frame_paths, tmpdir)`` where ``audio_path``
+    may be ``None`` if no audio track was found.
+    """
     if not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg is required but not installed")
 
@@ -27,11 +31,11 @@ def extract_media(video_path: str | os.PathLike):
 
     tmpdir = tempfile.mkdtemp()
     audio_path = os.path.join(tmpdir, "audio.wav")
-    frame_path = os.path.join(tmpdir, "frame.jpg")
-
+    frames_dir = os.path.join(tmpdir, "frames")
+    os.makedirs(frames_dir, exist_ok=True)
 
     try:
-        subprocess.run(
+        audio_proc = subprocess.run(
             [
                 "ffmpeg",
                 "-i",
@@ -45,9 +49,10 @@ def extract_media(video_path: str | os.PathLike):
                 "1",
                 audio_path,
             ],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
 
         subprocess.run(
@@ -56,40 +61,54 @@ def extract_media(video_path: str | os.PathLike):
                 "-i",
                 video_path,
                 "-vf",
-                "select=eq(n\\,0)",
-                "-vframes",
-                "1",
-                frame_path,
+                "scale=224:224",
+                "-vsync",
+                "0",
+                os.path.join(frames_dir, "frame_%05d.jpg"),
             ],
             check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
+        if audio_proc.returncode != 0:
+            # remove partial audio and continue without transcription
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+            audio_path = None
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"ffmpeg failed: {e}") from e
+        msg = e.stderr.strip() if e.stderr else str(e)
+        raise RuntimeError(f"ffmpeg failed: {msg}") from e
 
-
-    return audio_path, frame_path, tmpdir
+    frame_paths = sorted(
+        str(p) for p in Path(frames_dir).glob("frame_*.jpg")
+    )
+    return audio_path, frame_paths, tmpdir
 
 
 class GradioApp:
     def __init__(self, ollama_url: str):
         self.pipeline = LocalPipeline(ollama_url)
         self.transcript = ""
+        self.frames: list[str] = []
+        self.captions: list[str] = []
 
     def process_upload(self, video_file):
         if video_file is None:
             return "", ""
-        audio, frame, tmp = extract_media(video_file)
+        audio, self.frames, tmp = extract_media(video_file)
         self.transcript = self.pipeline.transcribe(audio)
-        caption = self.pipeline.caption(frame)
+        self.captions = self.pipeline.caption_frames(self.frames)
+        caption = self.captions[0] if self.captions else ""
         # cleanup tmpdir later
         return self.transcript, caption
 
     def answer(self, question, history):
-        if not self.transcript:
-            return history + [[question, "Upload a video first."],]
-        response = self.pipeline.answer(question, self.transcript)
+        if not self.frames:
+            history.append({"role": "user", "content": question})
+            history.append({"role": "assistant", "content": "Upload a video first."})
+            return history
+        response = self.pipeline.answer(question, self.transcript, self.captions)
         ts_match = re.search(r"(\d{1,2}:\d{2})", response)
         if ts_match:
             mmss = ts_match.group(1)
@@ -97,7 +116,8 @@ class GradioApp:
             sec = m * 60 + s
             link = f'<a href="#" onclick="document.getElementById(\'video\').currentTime={sec}; return false;">{mmss}</a>'
             response = response.replace(mmss, link)
-        history.append([question, response])
+        history.append({"role": "user", "content": question})
+        history.append({"role": "assistant", "content": response})
         return history
 
     def launch(self):
@@ -106,7 +126,7 @@ class GradioApp:
             video = gr.Video(label="Video", elem_id="video")
             transcript_box = gr.Textbox(label="Transcript")
             caption_box = gr.Textbox(label="Caption")
-            chatbot = gr.Chatbot()
+            chatbot = gr.Chatbot(type="messages")
             question = gr.Textbox(label="Question")
             send = gr.Button("Ask")
 
