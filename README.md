@@ -118,6 +118,35 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
 - NVIDIA GPU Operator v23.9 (Recommended minimum version)
 - Helm v3.x
 
+### Local Setup with Ollama + Whisper
+
+1. Install Whisper:
+   ```bash
+   pip install -U openai-whisper
+   ```
+
+2. Install and start Ollama:
+   ```bash
+   curl -fsSL https://ollama.com/install.sh | sh
+   ollama serve &
+   ```
+
+   Or use Docker Compose:
+   ```bash
+   docker-compose up -d
+   ```
+
+3. Pull models:
+   ```bash
+   ollama pull llava-llama3:instruct
+   ollama pull dengcao/Qwen3-Reranker-0.6B
+   ```
+
+4. Run the pipeline:
+   ```bash
+   python src/vss_engine/pipeline.py
+   ```
+   This uses Whisper for ASR, LLaVA for image captioning, and Qwen for reranking.
 ## Known CVEs
 
 VSS Engine 2.3.0 Container has the following known CVEs:
