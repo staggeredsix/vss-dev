@@ -19,7 +19,13 @@ from pipeline import LocalPipeline
 
 
 def extract_media(video_path: str | os.PathLike):
-    """Extract audio and all frames using ffmpeg."""
+
+    """Extract audio (if present) and all frames using ffmpeg.
+
+    Returns a tuple ``(audio_path, frame_paths, tmpdir)`` where ``audio_path``
+    may be ``None`` if no audio track was found.
+    """
+
     if not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg is required but not installed")
 
@@ -31,9 +37,9 @@ def extract_media(video_path: str | os.PathLike):
     frames_dir = os.path.join(tmpdir, "frames")
     os.makedirs(frames_dir, exist_ok=True)
 
-
     try:
-        res = subprocess.run(
+        audio_proc = subprocess.run(
+
             [
                 "ffmpeg",
                 "-i",
@@ -47,7 +53,9 @@ def extract_media(video_path: str | os.PathLike):
                 "1",
                 audio_path,
             ],
-            check=True,
+
+            check=False,
+
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -58,6 +66,12 @@ def extract_media(video_path: str | os.PathLike):
                 "ffmpeg",
                 "-i",
                 video_path,
+
+                "-vf",
+                "scale=224:224",
+                "-vsync",
+                "0",
+
                 os.path.join(frames_dir, "frame_%05d.jpg"),
             ],
             check=True,
@@ -65,6 +79,11 @@ def extract_media(video_path: str | os.PathLike):
             stderr=subprocess.PIPE,
             text=True,
         )
+        if audio_proc.returncode != 0:
+            # remove partial audio and continue without transcription
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+            audio_path = None
     except subprocess.CalledProcessError as e:
         msg = e.stderr.strip() if e.stderr else str(e)
         raise RuntimeError(f"ffmpeg failed: {msg}") from e
@@ -87,13 +106,16 @@ class GradioApp:
             return "", ""
         audio, self.frames, tmp = extract_media(video_file)
         self.transcript = self.pipeline.transcribe(audio)
-        self.captions = [self.pipeline.caption(f) for f in self.frames]
+
+        self.captions = self.pipeline.caption_frames(self.frames)
+
         caption = self.captions[0] if self.captions else ""
         # cleanup tmpdir later
         return self.transcript, caption
 
     def answer(self, question, history):
-        if not self.transcript:
+
+        if not self.frames:
 
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": "Upload a video first."})
