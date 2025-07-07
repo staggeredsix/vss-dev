@@ -2,7 +2,6 @@ import requests
 import whisper
 import base64
 import time
-from typing import Iterable
 import gradio as gr
 
 
@@ -37,7 +36,6 @@ class LocalPipeline:
         resp.raise_for_status()
         return resp.json().get("response", "")
 
-
     def caption_frames(
         self, image_paths: list[str], progress: gr.Progress | None = None
     ) -> list[str]:
@@ -46,7 +44,7 @@ class LocalPipeline:
         total = len(image_paths)
         times: list[float] = []
         for i in range(0, total, 5):
-            batch = image_paths[i : i + 5]
+            batch = image_paths[i:i + 5]
             images_b64 = []
             for p in batch:
                 with open(p, "rb") as img:
@@ -82,7 +80,6 @@ class LocalPipeline:
             progress((total, total), desc="Done")
         return captions
 
-
     def rerank(self, query: str, docs: list[str]):
         results = []
         for doc in docs:
@@ -99,7 +96,6 @@ class LocalPipeline:
             score = float(resp.json().get("response", "0").strip())
             results.append((doc, score))
         return sorted(results, key=lambda x: x[1], reverse=True)
-
 
     def answer(
         self, question: str, transcript: str, captions: list[str] | None = None

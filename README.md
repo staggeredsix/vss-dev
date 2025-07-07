@@ -143,10 +143,10 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
 
 
    Or run the helper script:
-   ```bash
-  ./run_local.sh
+  ```bash
+ ./run_local.sh [-p]
   ```
-  This helper installs the required PyTorch build and Whisper, starts Ollama on port 51234, pulls models, and launches the Gradio interface.
+ This helper installs the required PyTorch build and Whisper, starts Ollama on port 51234, pulls models, and launches the Gradio interface. Use `-p` to share the Gradio interface publicly.
 
 
 3. Pull models:
