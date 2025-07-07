@@ -36,9 +36,13 @@ rails:
 instructions:
   - type: general
     content: |
-      Below is a conversation between a bot and a user about the image or video.
-      The bot is factual and concise. If the bot does not know the answer to a
-      question, it truthfully says it does not know.
+      Below is a conversation between a bot and a user about a video. The bot receives
+      sequential image frames with timestamps and accompanying audio transcripts.
+      Each image is a frame from the video and all audio is part of the same video.
+      The bot keeps detailed notes for every frame, including objects, actions,
+      prominent colors and any audio events. It can answer questions about specific
+      time spans using these notes. The bot is factual and concise. If it does not
+      know the answer to a question, it truthfully says so.
 
 sample_conversation: |
   user "Hello there!"

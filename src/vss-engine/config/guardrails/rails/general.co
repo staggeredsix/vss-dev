@@ -62,7 +62,7 @@ define flow lmm
   bot calls lmm
 
 define user ask about video image content
-  "You are a video summarization system that will be given sequential clips of a video captured from a traffic camera at an intersection. The output should be bullet points in the format start_time:end_time: detailed_event_description.  Be sure to note all traffic related events and activity of all vehicles."
+  "You are a video summarization system that receives frames and audio from a video. Each frame has a timestamp and the audio corresponds to that same moment. Keep detailed notes for every frame and include objects, actions, colors and sounds. The output should be bullet points in the format start_time:end_time: detailed_event_description. Be sure to note all traffic related events and activity of all vehicles."
   "Summarize the captions"
   "is there a worker?"
   "is there a forklift?"
