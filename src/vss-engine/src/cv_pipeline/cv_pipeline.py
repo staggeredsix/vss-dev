@@ -582,7 +582,7 @@ class CVPipeline:
 
     @staticmethod
     def get_inference_interval():
-        return os.getenv("GDINO_INFERENCE_INTERVAL", "") or 1
+        return os.getenv("GDINO_INFERENCE_INTERVAL", "") or 3
 
     def process_cv_pipeline(
         self,

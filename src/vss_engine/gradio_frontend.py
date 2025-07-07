@@ -25,7 +25,7 @@ def extract_media(video_path: str | os.PathLike):
 
     """Extract audio (if present) and all frames using ffmpeg.
 
-    Returns a tuple ``(audio_path, frame_paths, tmpdir)`` where ``audio_path``
+    Returns a tuple ``(audio_path, frame_paths, fps, tmpdir)`` where ``audio_path``
     may be ``None`` if no audio track was found.
     """
 
@@ -39,6 +39,32 @@ def extract_media(video_path: str | os.PathLike):
 
     frames_dir = os.path.join(tmpdir, "frames")
     os.makedirs(frames_dir, exist_ok=True)
+
+    # Determine frames per second of the input video using ffprobe
+    ffprobe = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "0",
+            "-of",
+            "csv=p=0",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=r_frame_rate",
+            video_path,
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    rate = ffprobe.stdout.strip()
+    try:
+        num, den = rate.split("/")
+        fps = float(num) / float(den)
+    except ValueError:
+        fps = 1.0
 
     try:
         audio_proc = subprocess.run(
@@ -94,7 +120,7 @@ def extract_media(video_path: str | os.PathLike):
     frame_paths = sorted(
         str(p) for p in Path(frames_dir).glob("frame_*.jpg")
     )
-    return audio_path, frame_paths, tmpdir
+    return audio_path, frame_paths, fps, tmpdir
 
 
 def file_sha256(path: str | os.PathLike) -> str:
@@ -124,7 +150,8 @@ class GradioApp:
         self.pipeline = LocalPipeline(ollama_url)
         self.transcript = ""
         self.frames: list[str] = []
-        self.captions: list[str] = []
+        self.captions: list[dict] = []
+        self.fps: float = 1.0
         self.video_dir = Path("data/videos")
         self.db_dir = Path("data/db")
         self.video_dir.mkdir(parents=True, exist_ok=True)
@@ -183,7 +210,8 @@ class GradioApp:
             return "", ""
         self.transcript = data.get("transcript", "")
         self.captions = data.get("captions", [])
-        caption = self.captions[0] if self.captions else ""
+        self.fps = data.get("fps", 1.0)
+        caption = self.captions[0]["caption"] if self.captions else ""
         video_path = self.video_dir / data.get("file")
         return str(video_path), self.transcript, caption
 
@@ -197,12 +225,14 @@ class GradioApp:
         if not saved_path.exists():
             shutil.copy(video_file, saved_path)
 
-        audio, self.frames, tmp = extract_media(saved_path)
-        total = len(self.frames)
+        audio, self.frames, fps, tmp = extract_media(saved_path)
+        # Run captioning on every third frame to speed up processing
+        step_frames = self.frames[::3]
+        total = len(step_frames)
         progress((0, total), desc="Processing frames")
         self.transcript = self.pipeline.transcribe(audio)
-        self.captions = self.pipeline.caption_frames(self.frames, progress=progress)
-        caption = self.captions[0] if self.captions else ""
+        self.captions = self.pipeline.caption_frames(step_frames, fps=fps, progress=progress)
+        caption = self.captions[0]["caption"] if self.captions else ""
 
         save_db(
             self.db_dir,
@@ -210,6 +240,7 @@ class GradioApp:
             {
                 "file": saved_path.name,
                 "hash": vid_hash,
+                "fps": fps,
                 "transcript": self.transcript,
                 "captions": self.captions,
             },

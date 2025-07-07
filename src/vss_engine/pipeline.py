@@ -2,6 +2,7 @@ import requests
 import whisper
 import base64
 import time
+import re
 import gradio as gr
 
 
@@ -37,10 +38,16 @@ class LocalPipeline:
         return resp.json().get("response", "")
 
     def caption_frames(
-        self, image_paths: list[str], progress: gr.Progress | None = None
-    ) -> list[str]:
-        """Caption images in batches of five frames and report progress."""
-        captions: list[str] = []
+        self,
+        image_paths: list[str],
+        fps: float | None = None,
+        progress: gr.Progress | None = None,
+    ) -> list[dict]:
+        """Caption images in batches of five frames and report progress.
+
+        Returns a list of dicts ``{"time": float, "caption": str}``.
+        """
+        captions: list[dict] = []
         total = len(image_paths)
         times: list[float] = []
         for i in range(0, total, 5):
@@ -69,7 +76,13 @@ class LocalPipeline:
             batch_caps = [line.strip() for line in text.splitlines() if line.strip()]
             if len(batch_caps) < len(batch):
                 batch_caps.extend([""] * (len(batch) - len(batch_caps)))
-            captions.extend(batch_caps[: len(batch)])
+            for idx, cap in enumerate(batch_caps[: len(batch)]):
+                frame_index = i + idx
+                if fps:
+                    timestamp = frame_index / fps
+                else:
+                    timestamp = 0.0
+                captions.append({"time": timestamp, "caption": cap})
             if progress:
                 processed = min(i + len(batch), total)
                 avg = sum(times) / len(times)
@@ -98,13 +111,32 @@ class LocalPipeline:
         return sorted(results, key=lambda x: x[1], reverse=True)
 
     def answer(
-        self, question: str, transcript: str, captions: list[str] | None = None
+        self,
+        question: str,
+        transcript: str,
+        captions: list[dict] | None = None,
     ) -> str:
-        """Generate an answer using the transcript and frame captions."""
-        caption_text = "\n".join(captions or [])
+        """Generate an answer using RAG over the transcript and captions."""
+
+        docs: list[str] = []
+        # Split transcript into sentences for retrieval
+        for sent in re.split(r"(?<=[.!?])\s+", transcript):
+            s = sent.strip()
+            if s:
+                docs.append(s)
+
+        if captions:
+            for c in captions:
+                mm = int(c["time"] // 60)
+                ss = int(c["time"] % 60)
+                ts = f"{mm:02d}:{ss:02d}"
+                docs.append(f"[{ts}] {c['caption']}")
+
+        ranked = self.rerank(question, docs)
+        context = "\n".join(doc for doc, _ in ranked[:5])
+
         prompt = (
-            f"Video transcript:\n{transcript}\n"
-            f"Frame captions:\n{caption_text}\n\n"
+            f"Context from video:\n{context}\n\n"
             f"Question: {question}\n"
             "Answer the question and include the timestamp in mm:ss if relevant."
         )
@@ -134,8 +166,8 @@ if __name__ == "__main__":
     transcript = pipe.transcribe(args.audio)
     print("Transcript:", transcript)
 
-    captions = pipe.caption_frames([args.image])
-    print("Caption:", captions[0] if captions else "")
+    captions = pipe.caption_frames([args.image], fps=1.0)
+    print("Caption:", captions[0]["caption"] if captions else "")
 
     docs = ["doc one", "another document"]
     ranked = pipe.rerank("example query", docs)
