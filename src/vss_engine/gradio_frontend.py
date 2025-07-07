@@ -101,13 +101,15 @@ class GradioApp:
         self.frames: list[str] = []
         self.captions: list[str] = []
 
-    def process_upload(self, video_file):
+    def process_upload(self, video_file, progress=gr.Progress()):
         if video_file is None:
             return "", ""
         audio, self.frames, tmp = extract_media(video_file)
+        total = len(self.frames)
+        progress((0, total), desc="Processing frames")
         self.transcript = self.pipeline.transcribe(audio)
 
-        self.captions = self.pipeline.caption_frames(self.frames)
+        self.captions = self.pipeline.caption_frames(self.frames, progress=progress)
 
         caption = self.captions[0] if self.captions else ""
         # cleanup tmpdir later
@@ -145,7 +147,7 @@ class GradioApp:
 
             video.upload(self.process_upload, inputs=video, outputs=[transcript_box, caption_box])
             send.click(self.answer, inputs=[question, chatbot], outputs=chatbot)
-        demo.launch()
+        demo.queue().launch()
 
 
 def main():
