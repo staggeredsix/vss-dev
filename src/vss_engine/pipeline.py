@@ -1,6 +1,9 @@
 import requests
 import whisper
 import base64
+import time
+from typing import Iterable
+import gradio as gr
 
 
 class LocalPipeline:
@@ -35,15 +38,20 @@ class LocalPipeline:
         return resp.json().get("response", "")
 
 
-    def caption_frames(self, image_paths: list[str]) -> list[str]:
-        """Caption images in batches of five frames."""
+    def caption_frames(
+        self, image_paths: list[str], progress: gr.Progress | None = None
+    ) -> list[str]:
+        """Caption images in batches of five frames and report progress."""
         captions: list[str] = []
-        for i in range(0, len(image_paths), 5):
+        total = len(image_paths)
+        times: list[float] = []
+        for i in range(0, total, 5):
             batch = image_paths[i : i + 5]
             images_b64 = []
             for p in batch:
                 with open(p, "rb") as img:
                     images_b64.append(base64.b64encode(img.read()).decode())
+            t0 = time.time()
             resp = requests.post(
                 f"{self.ollama_url}/api/generate",
                 json={
@@ -57,11 +65,21 @@ class LocalPipeline:
                 },
             )
             resp.raise_for_status()
+            elapsed = time.time() - t0
+            times.append(elapsed)
             text = resp.json().get("response", "")
             batch_caps = [line.strip() for line in text.splitlines() if line.strip()]
             if len(batch_caps) < len(batch):
                 batch_caps.extend([""] * (len(batch) - len(batch_caps)))
             captions.extend(batch_caps[: len(batch)])
+            if progress:
+                processed = min(i + len(batch), total)
+                avg = sum(times) / len(times)
+                remaining = total - processed
+                eta = int(avg * remaining)
+                progress((processed, total), desc=f"{processed}/{total} ETA {eta}s")
+        if progress:
+            progress((total, total), desc="Done")
         return captions
 
 
