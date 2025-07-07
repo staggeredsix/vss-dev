@@ -323,7 +323,7 @@ class VideoFileFrameGetter:
         if "tracker_config" in self._cv_pipeline_configs:
             if os.path.isfile(self._cv_pipeline_configs["tracker_config"]):
                 self._tracker_config = self._cv_pipeline_configs["tracker_config"]
-        self._inference_interval = 1
+        self._inference_interval = 3
         if "inference_interval" in self._cv_pipeline_configs:
             self._inference_interval = self._cv_pipeline_configs["inference_interval"]
 
