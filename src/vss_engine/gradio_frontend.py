@@ -1,21 +1,24 @@
 import argparse
 import os
 import re
+import json
+import hashlib
+import time
 
 import shutil
 
 import subprocess
 import tempfile
 from pathlib import Path
+import sys
 
 import gradio as gr
 
 # Allow importing pipeline when executed from repository root
 sys_path = Path(__file__).resolve().parent
-import sys
 
 sys.path.append(str(sys_path))
-from pipeline import LocalPipeline
+from pipeline import LocalPipeline  # noqa: E402
 
 
 def extract_media(video_path: str | os.PathLike):
@@ -94,25 +97,123 @@ def extract_media(video_path: str | os.PathLike):
     return audio_path, frame_paths, tmpdir
 
 
+def file_sha256(path: str | os.PathLike) -> str:
+    """Return the sha256 hash of a file."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def save_db(db_dir: Path, vid_hash: str, data: dict) -> None:
+    with open(db_dir / f"{vid_hash}.json", "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+def load_db(db_dir: Path, vid_hash: str) -> dict | None:
+    fp = db_dir / f"{vid_hash}.json"
+    if not fp.exists():
+        return None
+    with open(fp, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 class GradioApp:
     def __init__(self, ollama_url: str):
         self.pipeline = LocalPipeline(ollama_url)
         self.transcript = ""
         self.frames: list[str] = []
         self.captions: list[str] = []
+        self.video_dir = Path("data/videos")
+        self.db_dir = Path("data/db")
+        self.video_dir.mkdir(parents=True, exist_ok=True)
+        self.db_dir.mkdir(parents=True, exist_ok=True)
+
+    def _list_videos(self) -> list[str]:
+        vids = []
+        for p in self.db_dir.glob("*.json"):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                    vids.append(meta.get("file", p.stem))
+            except Exception:
+                continue
+        return sorted(vids)
+
+    def process_stream(self, url: str, progress=gr.Progress()):
+        if not url:
+            return gr.update(), "", "", gr.update(choices=self._list_videos())
+
+        out_file = self.video_dir / f"stream_{int(time.time())}.mp4"
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    url,
+                    "-t",
+                    "10",
+                    str(out_file),
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(e.stderr.strip() if e.stderr else str(e)) from e
+
+        transcript, caption = self.process_upload(str(out_file), progress)
+        return gr.update(value=str(out_file)), transcript, caption, gr.update(choices=self._list_videos())
+
+    def load_existing(self, file_name: str):
+        vid_hash = None
+        for p in self.db_dir.glob("*.json"):
+            with open(p, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+                if meta.get("file") == file_name:
+                    vid_hash = meta.get("hash")
+                    break
+        if not vid_hash:
+            return "", ""
+        data = load_db(self.db_dir, vid_hash)
+        if not data:
+            return "", ""
+        self.transcript = data.get("transcript", "")
+        self.captions = data.get("captions", [])
+        caption = self.captions[0] if self.captions else ""
+        video_path = self.video_dir / data.get("file")
+        return str(video_path), self.transcript, caption
 
     def process_upload(self, video_file, progress=gr.Progress()):
         if video_file is None:
             return "", ""
-        audio, self.frames, tmp = extract_media(video_file)
+        # save the uploaded file to the videos directory
+        vid_hash = file_sha256(video_file)
+        ext = Path(video_file).suffix
+        saved_path = self.video_dir / f"{vid_hash}{ext}"
+        if not saved_path.exists():
+            shutil.copy(video_file, saved_path)
+
+        audio, self.frames, tmp = extract_media(saved_path)
         total = len(self.frames)
         progress((0, total), desc="Processing frames")
         self.transcript = self.pipeline.transcribe(audio)
-
         self.captions = self.pipeline.caption_frames(self.frames, progress=progress)
-
         caption = self.captions[0] if self.captions else ""
-        # cleanup tmpdir later
+
+        save_db(
+            self.db_dir,
+            vid_hash,
+            {
+                "file": saved_path.name,
+                "hash": vid_hash,
+                "transcript": self.transcript,
+                "captions": self.captions,
+            },
+        )
         return self.transcript, caption
 
     def answer(self, question, history):
@@ -129,16 +230,21 @@ class GradioApp:
             mmss = ts_match.group(1)
             m, s = map(int, mmss.split(":"))
             sec = m * 60 + s
-            link = f'<a href="#" onclick="document.getElementById(\'video\').currentTime={sec}; return false;">{mmss}</a>'
+            link = (
+                f'<a href="#" onclick="document.getElementById(\'video\')'
+                f'.currentTime={sec}; return false;">{mmss}</a>'
+            )
             response = response.replace(mmss, link)
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": response})
         return history
 
-    def launch(self):
+    def launch(self, share: bool = False):
         with gr.Blocks() as demo:
-            state = gr.State([])
             video = gr.Video(label="Video", elem_id="video")
+            url = gr.Textbox(label="Stream URL")
+            capture_btn = gr.Button("Capture Stream")
+            existing = gr.Dropdown(label="Existing Videos", choices=self._list_videos())
             transcript_box = gr.Textbox(label="Transcript")
             caption_box = gr.Textbox(label="Caption")
             chatbot = gr.Chatbot(type="messages")
@@ -146,16 +252,31 @@ class GradioApp:
             send = gr.Button("Ask")
 
             video.upload(self.process_upload, inputs=video, outputs=[transcript_box, caption_box])
+            capture_btn.click(
+                self.process_stream,
+                inputs=url,
+                outputs=[video, transcript_box, caption_box, existing],
+            )
+            existing.change(
+                self.load_existing,
+                inputs=existing,
+                outputs=[video, transcript_box, caption_box],
+            )
             send.click(self.answer, inputs=[question, chatbot], outputs=chatbot)
-        demo.queue().launch()
+        demo.queue().launch(share=share)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ollama-url", default="http://localhost:11434")
+    parser.add_argument(
+        "--share",
+        action="store_true",
+        help="Share the Gradio interface publicly",
+    )
     args = parser.parse_args()
     app = GradioApp(args.ollama_url)
-    app.launch()
+    app.launch(share=args.share)
 
 
 if __name__ == "__main__":
