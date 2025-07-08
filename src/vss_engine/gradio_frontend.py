@@ -15,11 +15,9 @@ import sys
 
 import gradio as gr
 
-# Allow importing pipeline when executed from repository root
-sys_path = Path(__file__).resolve().parent
-
-sys.path.append(str(sys_path))
-from pipeline import LocalPipeline  # noqa: E402
+# Allow importing as a package when executed from repository root
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from vss_engine.pipeline import LocalPipeline  # noqa: E402
 
 
 def extract_audio_bytes(video_path: str | os.PathLike) -> bytes | None:
@@ -77,11 +75,12 @@ def load_db(db_dir: Path, vid_hash: str) -> dict | None:
 
 class GradioApp:
     def __init__(self, ollama_url: str):
-        self.pipeline = LocalPipeline(ollama_url)
+        self.pipeline = LocalPipeline(ollama_url, rag_db_dir="data/db")
         self.transcript = ""
         self.frames: list[str] = []
         self.captions: list[dict] = []
         self.fps: float = 1.0
+        self.current_vid: str | None = None
         self.video_dir = Path("data/videos")
         self.db_dir = Path("data/db")
         self.video_dir.mkdir(parents=True, exist_ok=True)
@@ -138,6 +137,7 @@ class GradioApp:
         data = load_db(self.db_dir, vid_hash)
         if not data:
             return "", ""
+        self.current_vid = vid_hash
         self.transcript = data.get("transcript", "")
         self.captions = data.get("captions", [])
         self.fps = data.get("fps", 1.0)
@@ -156,10 +156,11 @@ class GradioApp:
             shutil.copy(video_file, saved_path)
 
         audio_bytes = extract_audio_bytes(saved_path)
-        self.transcript = self.pipeline.transcribe(audio_bytes)
+        self.current_vid = vid_hash
+        self.transcript = self.pipeline.transcribe(audio_bytes, source_id=vid_hash)
         progress((0, 0), desc="Processing frames")
         fps = 4.0
-        self.captions = self.pipeline.caption_realtime(str(saved_path), target_fps=fps)
+        self.captions = self.pipeline.caption_realtime(str(saved_path), target_fps=fps, source_id=vid_hash)
         self.fps = fps
         caption = self.captions[0]["caption"] if self.captions else ""
 
@@ -178,12 +179,12 @@ class GradioApp:
 
     def answer(self, question, history):
 
-        if not self.captions:
+        if not self.current_vid:
 
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": "Upload a video first."})
             return history
-        response = self.pipeline.answer(question, self.transcript, self.captions)
+        response = self.pipeline.answer(question, source_id=self.current_vid)
 
         ts_match = re.search(r"(\d{1,2}:\d{2})", response)
         if ts_match:
