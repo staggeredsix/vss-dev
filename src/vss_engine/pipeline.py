@@ -10,6 +10,7 @@ from typing import Iterable, List, Dict, Optional, Union
 import cv2
 import numpy as np
 import torch
+import logging
 
 
 import os
@@ -21,9 +22,9 @@ class LocalPipeline:
     """Simple pipeline using local models via Ollama and Whisper."""
 
     def __init__(self, ollama_url: str = "http://localhost:11434", device: str | None = None,
-
                  rag_db_dir: str = "data/db") -> None:
 
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.ollama_url = ollama_url.rstrip("/")
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -33,6 +34,18 @@ class LocalPipeline:
         self.rag_db_dir = rag_db_dir
         os.makedirs(self.rag_db_dir, exist_ok=True)
 
+    def _post_generate(self, payload: dict) -> requests.Response:
+        """Helper to send a generate request to Ollama with logging."""
+        model = payload.get("model", "")
+        prompt = payload.get("prompt", "")
+        self.logger.debug("Sending generate request to %s with model=%s", self.ollama_url, model)
+        start = time.time()
+        resp = requests.post(f"{self.ollama_url}/api/generate", json=payload)
+        elapsed = time.time() - start
+        self.logger.info("Model %s finished in %.2fs", model, elapsed)
+        resp.raise_for_status()
+        return resp
+
     def _db_for(self, source_id: str) -> RAGDatabase:
         """Return the RAG database for a given source."""
         path = os.path.join(self.rag_db_dir, f"{source_id}.pkl")
@@ -41,6 +54,7 @@ class LocalPipeline:
 
     def transcribe(self, audio: Union[str, bytes, np.ndarray, None], source_id: str | None = None) -> str:
         """Transcribe audio from a path or raw bytes and cache the result."""
+        self.logger.info("Transcribing audio%s", f" for {source_id}" if source_id else "")
         if source_id:
 
             db = self._db_for(source_id)
@@ -59,8 +73,11 @@ class LocalPipeline:
                 input_data = array
         else:
             input_data = audio
+        t0 = time.time()
         result = self.asr_model.transcribe(input_data)
+        elapsed = time.time() - t0
         text = result.get("text", "")
+        self.logger.info("Whisper transcription finished in %.2fs", elapsed)
         if source_id:
 
             db.add_transcript(text)
@@ -69,6 +86,7 @@ class LocalPipeline:
 
     def caption(self, image: Union[str, bytes, np.ndarray]) -> str:
         """Generate an image caption using the local VLM."""
+        self.logger.debug("Captioning image")
         if isinstance(image, str):
             with open(image, "rb") as img:
                 img_b64 = base64.b64encode(img.read()).decode()
@@ -80,17 +98,14 @@ class LocalPipeline:
                 return ""
             img_b64 = base64.b64encode(buf.tobytes()).decode()
 
-        resp = requests.post(
-            f"{self.ollama_url}/api/generate",
-            json={
+        resp = self._post_generate(
+            {
                 "model": "llava-llama3:8b",
                 "prompt": "Describe this image.",
                 "images": [img_b64],
                 "stream": False,
-
-            },
+            }
         )
-        resp.raise_for_status()
         return resp.json().get("response", "")
 
     def caption_frames(
@@ -104,6 +119,7 @@ class LocalPipeline:
 
         Returns a list of dicts ``{"time": float, "caption": str}``.
         """
+        self.logger.debug("Captioning %d frames", len(image_paths))
         if source_id:
 
             db = self._db_for(source_id)
@@ -122,9 +138,8 @@ class LocalPipeline:
                 with open(p, "rb") as img:
                     images_b64.append(base64.b64encode(img.read()).decode())
             t0 = time.time()
-            resp = requests.post(
-                f"{self.ollama_url}/api/generate",
-                json={
+            resp = self._post_generate(
+                {
                     "model": "llava-llama3:8b",
                     "prompt": (
                         "Describe each image in one sentence. "
@@ -132,9 +147,8 @@ class LocalPipeline:
                     ),
                     "images": images_b64,
                     "stream": False,
-                },
+                }
             )
-            resp.raise_for_status()
             elapsed = time.time() - t0
             times.append(elapsed)
             text = resp.json().get("response", "")
@@ -174,6 +188,7 @@ class LocalPipeline:
         Frames are sampled according to ``target_fps`` and dropped if inference
         is slower than ``min_fps``. Batch size is always one for lowest latency.
         """
+        self.logger.info("Realtime captioning %s", video_path)
         if source_id:
 
             db = self._db_for(source_id)
@@ -230,18 +245,17 @@ class LocalPipeline:
         return captions
 
     def rerank(self, query: str, docs: list[str]):
+        self.logger.debug("Reranking %d documents", len(docs))
         results = []
         for doc in docs:
             prompt = f"Query: {query}\nDocument: {doc}\nScore 0-1:"
-            resp = requests.post(
-                f"{self.ollama_url}/api/generate",
-                json={
+            resp = self._post_generate(
+                {
                     "model": "dengcao/Qwen3-Reranker-8B:Q5_K_M",
                     "prompt": prompt,
                     "stream": False,
-                },
+                }
             )
-            resp.raise_for_status()
             score = float(resp.json().get("response", "0").strip())
             results.append((doc, score))
         return sorted(results, key=lambda x: x[1], reverse=True)
@@ -254,6 +268,7 @@ class LocalPipeline:
         source_id: str | None = None,
     ) -> str:
         """Generate an answer using RAG over the transcript and captions."""
+        self.logger.info("Answering question: %s", question)
 
         if source_id:
 
@@ -289,15 +304,13 @@ class LocalPipeline:
             f"Question: {question}\n"
             "Answer the question and include the timestamp in mm:ss if relevant."
         )
-        resp = requests.post(
-            f"{self.ollama_url}/api/generate",
-            json={
+        resp = self._post_generate(
+            {
                 "model": "llava-llama3:8b",
                 "prompt": prompt,
                 "stream": False,
-            },
+            }
         )
-        resp.raise_for_status()
         return resp.json().get("response", "")
 
 
