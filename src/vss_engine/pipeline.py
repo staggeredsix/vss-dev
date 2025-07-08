@@ -11,7 +11,9 @@ import cv2
 import numpy as np
 import torch
 
+
 import os
+
 from .rag_db import RAGDatabase
 
 
@@ -19,12 +21,15 @@ class LocalPipeline:
     """Simple pipeline using local models via Ollama and Whisper."""
 
     def __init__(self, ollama_url: str = "http://localhost:11434", device: str | None = None,
+
                  rag_db_dir: str = "data/db") -> None:
+
         self.ollama_url = ollama_url.rstrip("/")
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
         self.asr_model = whisper.load_model("small", device=self.device)
+
         self.rag_db_dir = rag_db_dir
         os.makedirs(self.rag_db_dir, exist_ok=True)
 
@@ -33,11 +38,14 @@ class LocalPipeline:
         path = os.path.join(self.rag_db_dir, f"{source_id}.pkl")
         return RAGDatabase(path)
 
+
     def transcribe(self, audio: Union[str, bytes, np.ndarray, None], source_id: str | None = None) -> str:
         """Transcribe audio from a path or raw bytes and cache the result."""
         if source_id:
+
             db = self._db_for(source_id)
             cached = db.get_transcript()
+
             if cached:
                 return cached
         if audio is None:
@@ -54,7 +62,9 @@ class LocalPipeline:
         result = self.asr_model.transcribe(input_data)
         text = result.get("text", "")
         if source_id:
+
             db.add_transcript(text)
+
         return text
 
     def caption(self, image: Union[str, bytes, np.ndarray]) -> str:
@@ -95,8 +105,10 @@ class LocalPipeline:
         Returns a list of dicts ``{"time": float, "caption": str}``.
         """
         if source_id:
+
             db = self._db_for(source_id)
             cached = db.get_captions()
+
             if cached:
                 return cached
 
@@ -145,7 +157,9 @@ class LocalPipeline:
         if progress:
             progress((total, total), desc="Done")
         if source_id:
+
             db.add_captions(captions)
+
         return captions
 
     def caption_realtime(
@@ -161,8 +175,10 @@ class LocalPipeline:
         is slower than ``min_fps``. Batch size is always one for lowest latency.
         """
         if source_id:
+
             db = self._db_for(source_id)
             cached = db.get_captions()
+
             if cached:
                 return cached
 
@@ -208,7 +224,9 @@ class LocalPipeline:
         t1.join()
         t2.join()
         if source_id:
+
             db.add_captions(captions)
+
         return captions
 
     def rerank(self, query: str, docs: list[str]):
@@ -238,11 +256,13 @@ class LocalPipeline:
         """Generate an answer using RAG over the transcript and captions."""
 
         if source_id:
+
             db = self._db_for(source_id)
             if transcript is None:
                 transcript = db.get_transcript()
             if captions is None:
                 captions = db.get_captions()
+
 
         if transcript is None:
             transcript = ""

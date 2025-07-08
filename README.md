@@ -164,7 +164,9 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
    Use `--share` to obtain a public Gradio link.
    This uses Whisper for ASR, LLaVA for image captioning, and Qwen for reranking.
    When the model response includes a timestamp, click it to jump to that time in the video.
+
    The interface stores transcripts and frame captions in a per-video RAG database under `data/db`,
+
    so repeated questions do not re-run inference over the same video.
 
 ## Known CVEs
