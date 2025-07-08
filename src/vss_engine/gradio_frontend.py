@@ -4,6 +4,7 @@ import re
 import json
 import hashlib
 import time
+import logging
 
 import shutil
 
@@ -143,7 +144,7 @@ class GradioApp:
         self.fps = data.get("fps", 1.0)
         caption = self.captions[0]["caption"] if self.captions else ""
         video_path = self.video_dir / data.get("file")
-        return str(video_path), self.transcript, caption
+        return gr.update(value=str(video_path)), self.transcript, caption
 
     def process_upload(self, video_file, progress=gr.Progress()):
         if video_file is None:
@@ -236,6 +237,7 @@ def main():
         help="Share the Gradio interface publicly",
     )
     args = parser.parse_args()
+    logging.basicConfig(level=os.environ.get("VSS_LOG_LEVEL", "INFO").upper())
     app = GradioApp(args.ollama_url)
     app.launch(share=args.share)
 
