@@ -21,8 +21,12 @@ from .rag_db import RAGDatabase
 class LocalPipeline:
     """Simple pipeline using local models via Ollama and Whisper."""
 
-    def __init__(self, ollama_url: str = "http://localhost:11434", device: str | None = None,
-                 rag_db_dir: str = "data/db") -> None:
+    def __init__(
+        self,
+        ollama_url: str = "http://localhost:11434",
+        device: str | None = None,
+        rag_db_dir: str = "data/db",
+    ) -> None:
 
         self.logger = logging.getLogger(self.__class__.__name__)
         self.ollama_url = ollama_url.rstrip("/")
@@ -38,7 +42,9 @@ class LocalPipeline:
         """Helper to send a generate request to Ollama with logging."""
         model = payload.get("model", "")
         prompt = payload.get("prompt", "")
-        self.logger.debug("Sending generate request to %s with model=%s", self.ollama_url, model)
+        self.logger.debug(
+            "Sending generate request to %s with model=%s", self.ollama_url, model
+        )
         start = time.time()
         resp = requests.post(f"{self.ollama_url}/api/generate", json=payload)
         elapsed = time.time() - start
@@ -48,13 +54,16 @@ class LocalPipeline:
 
     def _db_for(self, source_id: str) -> RAGDatabase:
         """Return the RAG database for a given source."""
-        path = os.path.join(self.rag_db_dir, f"{source_id}.pkl")
+        path = os.path.join(self.rag_db_dir, source_id)
         return RAGDatabase(path)
 
-
-    def transcribe(self, audio: Union[str, bytes, np.ndarray, None], source_id: str | None = None) -> str:
+    def transcribe(
+        self, audio: Union[str, bytes, np.ndarray, None], source_id: str | None = None
+    ) -> str:
         """Transcribe audio from a path or raw bytes and cache the result."""
-        self.logger.info("Transcribing audio%s", f" for {source_id}" if source_id else "")
+        self.logger.info(
+            "Transcribing audio%s", f" for {source_id}" if source_id else ""
+        )
         if source_id:
 
             db = self._db_for(source_id)
@@ -77,10 +86,11 @@ class LocalPipeline:
         result = self.asr_model.transcribe(input_data)
         elapsed = time.time() - t0
         text = result.get("text", "")
+        segments = result.get("segments", [])
         self.logger.info("Whisper transcription finished in %.2fs", elapsed)
         if source_id:
 
-            db.add_transcript(text)
+            db.add_transcript_segments(text, segments)
 
         return text
 
@@ -100,8 +110,8 @@ class LocalPipeline:
 
         resp = self._post_generate(
             {
-                "model": "llava-llama3:8b",
-                "prompt": "Describe this image.",
+                "model": "llava:34b-v1.6",
+                "prompt": "Describe this image in detail, be concise but detailed and logical.",
                 "images": [img_b64],
                 "stream": False,
             }
@@ -132,7 +142,7 @@ class LocalPipeline:
         total = len(image_paths)
         times: list[float] = []
         for i in range(0, total, 5):
-            batch = image_paths[i:i + 5]
+            batch = image_paths[i : i + 5]
             images_b64 = []
             for p in batch:
                 with open(p, "rb") as img:
@@ -140,10 +150,9 @@ class LocalPipeline:
             t0 = time.time()
             resp = self._post_generate(
                 {
-                    "model": "llava-llama3:8b",
+                    "model": "llava:34b-v1.6",
                     "prompt": (
-                        "Describe each image in one sentence. "
-                        "Return one sentence per image separated by newline."
+                        "Describe each image in detail, be concise but detailed and logical."
                     ),
                     "images": images_b64,
                     "stream": False,
@@ -251,7 +260,7 @@ class LocalPipeline:
             prompt = f"Query: {query}\nDocument: {doc}\nScore 0-1:"
             resp = self._post_generate(
                 {
-                    "model": "dengcao/Qwen3-Reranker-8B:Q5_K_M",
+                    "model": "dengcao/Qwen3-Reranker-4B:Q4_K_M",
                     "prompt": prompt,
                     "stream": False,
                 }
@@ -278,23 +287,23 @@ class LocalPipeline:
             if captions is None:
                 captions = db.get_captions()
 
-
         if transcript is None:
             transcript = ""
 
         docs: list[str] = []
-        # Split transcript into sentences for retrieval
-        for sent in re.split(r"(?<=[.!?])\s+", transcript):
-            s = sent.strip()
-            if s:
-                docs.append(s)
-
-        if captions:
-            for c in captions:
-                mm = int(c["time"] // 60)
-                ss = int(c["time"] % 60)
-                ts = f"{mm:02d}:{ss:02d}"
-                docs.append(f"[{ts}] {c['caption']}")
+        if source_id:
+            docs = [doc for doc, _ in db.search(question, top_k=10)]
+        else:
+            for sent in re.split(r"(?<=[.!?])\s+", transcript):
+                s = sent.strip()
+                if s:
+                    docs.append(s)
+            if captions:
+                for c in captions:
+                    mm = int(c["time"] // 60)
+                    ss = int(c["time"] % 60)
+                    ts = f"{mm:02d}:{ss:02d}"
+                    docs.append(f"[{ts}] {c['caption']}")
 
         ranked = self.rerank(question, docs)
         context = "\n".join(doc for doc, _ in ranked[:5])
@@ -306,7 +315,7 @@ class LocalPipeline:
         )
         resp = self._post_generate(
             {
-                "model": "llava-llama3:8b",
+                "model": "llava:34b-v1.6",
                 "prompt": prompt,
                 "stream": False,
             }
@@ -319,7 +328,11 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Run local VSS pipeline")
-    parser.add_argument("--ollama-url", default="http://localhost:11434", help="Base URL for Ollama server")
+    parser.add_argument(
+        "--ollama-url",
+        default="http://localhost:11434",
+        help="Base URL for Ollama server",
+    )
     parser.add_argument("--audio", default="audio.wav", help="Path to audio file")
     parser.add_argument("--image", default="frame.jpg", help="Path to image file")
     args = parser.parse_args()

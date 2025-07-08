@@ -22,6 +22,7 @@ shift $((OPTIND - 1))
 # Install PyTorch for GPUs using CUDA 12.8 and Whisper from source
 pip3 install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 pip3 install -q git+https://github.com/openai/whisper.git
+pip3 install -q sentence-transformers
 
 
 # Start Ollama on the chosen port in the background
@@ -44,8 +45,12 @@ echo "Ollama running on port ${PORT}"
 
 # Pull required models
 
-ollama pull llava-llama3:8b
-ollama pull dengcao/Qwen3-Reranker-8B:Q5_K_M
+ollama pull llava:34b-v1.6
+ollama pull dengcao/Qwen3-Reranker-4B:Q4_K_M
+
+# Warm up llava model
+curl -s -X POST "http://localhost:${PORT}/api/generate" \
+  -d '{"model":"llava:34b-v1.6","prompt":"You are a vision language model that describes images in detail. You do not describe images whimsically or with any emotion. You describe images with logic and detail.","stream":false}' >/dev/null
 
 # Launch the Gradio frontend using the same port
 SHARE_ARG=""
