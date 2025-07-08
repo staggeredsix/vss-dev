@@ -9,6 +9,7 @@ import shutil
 
 import subprocess
 import tempfile
+import numpy as np
 from pathlib import Path
 import sys
 
@@ -21,106 +22,35 @@ sys.path.append(str(sys_path))
 from pipeline import LocalPipeline  # noqa: E402
 
 
-def extract_media(video_path: str | os.PathLike):
-
-    """Extract audio (if present) and all frames using ffmpeg.
-
-    Returns a tuple ``(audio_path, frame_paths, fps, tmpdir)`` where ``audio_path``
-    may be ``None`` if no audio track was found.
-    """
-
+def extract_audio_bytes(video_path: str | os.PathLike) -> bytes | None:
+    """Return raw 16 kHz mono PCM audio from a video without writing to disk."""
     if not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg is required but not installed")
-
     video_path = os.fspath(video_path)
-
-    tmpdir = tempfile.mkdtemp()
-    audio_path = os.path.join(tmpdir, "audio.wav")
-
-    frames_dir = os.path.join(tmpdir, "frames")
-    os.makedirs(frames_dir, exist_ok=True)
-
-    # Determine frames per second of the input video using ffprobe
-    ffprobe = subprocess.run(
+    proc = subprocess.run(
         [
-            "ffprobe",
-            "-v",
-            "0",
-            "-of",
-            "csv=p=0",
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "stream=r_frame_rate",
+            "ffmpeg",
+            "-i",
             video_path,
+            "-vn",
+            "-acodec",
+            "pcm_s16le",
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
+            "-f",
+            "s16le",
+            "-",
         ],
-        check=True,
+        check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
     )
-    rate = ffprobe.stdout.strip()
-    try:
-        num, den = rate.split("/")
-        fps = float(num) / float(den)
-    except ValueError:
-        fps = 1.0
+    if proc.returncode != 0:
+        return None
+    return proc.stdout
 
-    try:
-        audio_proc = subprocess.run(
-
-            [
-                "ffmpeg",
-                "-i",
-                video_path,
-                "-vn",
-                "-acodec",
-                "pcm_s16le",
-                "-ar",
-                "16000",
-                "-ac",
-                "1",
-                audio_path,
-            ],
-
-            check=False,
-
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-i",
-                video_path,
-
-                "-vf",
-                "scale=224:224",
-                "-vsync",
-                "0",
-
-                os.path.join(frames_dir, "frame_%05d.jpg"),
-            ],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if audio_proc.returncode != 0:
-            # remove partial audio and continue without transcription
-            if os.path.exists(audio_path):
-                os.remove(audio_path)
-            audio_path = None
-    except subprocess.CalledProcessError as e:
-        msg = e.stderr.strip() if e.stderr else str(e)
-        raise RuntimeError(f"ffmpeg failed: {msg}") from e
-
-    frame_paths = sorted(
-        str(p) for p in Path(frames_dir).glob("frame_*.jpg")
-    )
-    return audio_path, frame_paths, fps, tmpdir
 
 
 def file_sha256(path: str | os.PathLike) -> str:
@@ -225,13 +155,12 @@ class GradioApp:
         if not saved_path.exists():
             shutil.copy(video_file, saved_path)
 
-        audio, self.frames, fps, tmp = extract_media(saved_path)
-        # Run captioning on every third frame to speed up processing
-        step_frames = self.frames[::3]
-        total = len(step_frames)
-        progress((0, total), desc="Processing frames")
-        self.transcript = self.pipeline.transcribe(audio)
-        self.captions = self.pipeline.caption_frames(step_frames, fps=fps, progress=progress)
+        audio_bytes = extract_audio_bytes(saved_path)
+        self.transcript = self.pipeline.transcribe(audio_bytes)
+        progress((0, 0), desc="Processing frames")
+        fps = 4.0
+        self.captions = self.pipeline.caption_realtime(str(saved_path), target_fps=fps)
+        self.fps = fps
         caption = self.captions[0]["caption"] if self.captions else ""
 
         save_db(
@@ -249,7 +178,7 @@ class GradioApp:
 
     def answer(self, question, history):
 
-        if not self.frames:
+        if not self.captions:
 
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": "Upload a video first."})
