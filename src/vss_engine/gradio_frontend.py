@@ -161,7 +161,9 @@ class GradioApp:
         self.transcript = self.pipeline.transcribe(audio_bytes, source_id=vid_hash)
         progress((0, 0), desc="Processing frames")
         fps = 4.0
-        self.captions = self.pipeline.caption_realtime(str(saved_path), target_fps=fps, source_id=vid_hash)
+        self.captions = self.pipeline.caption_realtime(
+            str(saved_path), target_fps=fps, progress=progress, source_id=vid_hash
+        )
         self.fps = fps
         caption = self.captions[0]["caption"] if self.captions else ""
 

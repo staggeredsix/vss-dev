@@ -190,12 +190,14 @@ class LocalPipeline:
         video_path: str,
         target_fps: float = 4.0,
         min_fps: float = 2.0,
+        progress: gr.Progress | None = None,
         source_id: str | None = None,
     ) -> list[dict]:
         """Caption video frames in near real time using two threads.
 
         Frames are sampled according to ``target_fps`` and dropped if inference
         is slower than ``min_fps``. Batch size is always one for lowest latency.
+        Progress is reported via ``progress`` if provided.
         """
         self.logger.info("Realtime captioning %s", video_path)
         if source_id:
@@ -208,11 +210,16 @@ class LocalPipeline:
 
         cap = cv2.VideoCapture(video_path)
         orig_fps = cap.get(cv2.CAP_PROP_FPS) or target_fps
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
         step = max(1, int(round(orig_fps / target_fps)))
+        total_to_process = (total_frames + step - 1) // step if total_frames else 0
+        self.logger.info("Total frames to process: %d", total_to_process)
         frame_interval = 1.0 / target_fps
         q: queue.Queue[Optional[bytes]] = queue.Queue(maxsize=1)
         captions: list[dict] = []
         start = time.time()
+        times: list[float] = []
+        processed = 0
 
         def capture_loop():
             idx = 0
@@ -233,13 +240,29 @@ class LocalPipeline:
             cap.release()
 
         def inference_loop():
+            nonlocal processed
             while True:
                 item = q.get()
                 if item is None:
                     break
+                t0 = time.time()
                 caption = self.caption(item)
+                elapsed = time.time() - t0
+                times.append(elapsed)
+                processed += 1
                 ts = time.time() - start
                 captions.append({"time": ts, "caption": caption})
+                avg = sum(times) / len(times)
+                remaining = max(total_to_process - processed, 0)
+                eta = int(avg * remaining)
+                if progress:
+                    progress((processed, total_to_process), desc=f"{processed}/{total_to_process} ETA {eta}s")
+                self.logger.info(
+                    "Processed %d/%d frames (ETA %ds)",
+                    processed,
+                    total_to_process,
+                    eta,
+                )
 
         t1 = threading.Thread(target=capture_loop)
         t2 = threading.Thread(target=inference_loop)
@@ -247,6 +270,8 @@ class LocalPipeline:
         t2.start()
         t1.join()
         t2.join()
+        if progress:
+            progress((total_to_process, total_to_process), desc="Done")
         if source_id:
 
             db.add_captions(captions)
