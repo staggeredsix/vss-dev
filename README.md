@@ -164,6 +164,8 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
    Use `--share` to obtain a public Gradio link.
    This uses Whisper for ASR, LLaVA for image captioning, and Qwen for reranking.
    When the model response includes a timestamp, click it to jump to that time in the video.
+   The interface stores transcripts and frame captions in a small RAG database under `data/db`
+   so repeated questions do not re-run inference over the same video.
 
 ## Known CVEs
 
@@ -186,5 +188,4 @@ VSS Engine 2.3.0 Source Code has the following known CVEs:
 	
 ## License
 The software and materials in this repository are governed by the [NVIDIA Software License Agreement](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/) and the Product-Specific Terms for [NVIDIA AI Products](https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/); except for models which are governed by the [NVIDIA Community Model License](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-community-models-license/).
-
 ADDITIONAL INFORMATION: [Llama 3.1 Community License Agreement](https://www.llama.com/llama3_1/license/) for Llama-3.1-70b-instruct; [Llama 3.2 Community License Agreement](https://www.llama.com/llama3_2/license/) for NVIDIA Retrieval QA Llama 3.2 1B Embedding v2 and NVIDIA Retrieval QA Llama 3.2 1B Reranking v2, Apache, Version 2.0 for https://github.com/google-research/big_vision/blob/main/LICENSE and Apache License, Version 2.0 for https://github.com/01-ai/Yi/blob/main/LICENSE. Built with Llama.

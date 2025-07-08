@@ -11,19 +11,27 @@ import cv2
 import numpy as np
 import torch
 
+from .rag_db import RAGDatabase
+
 
 class LocalPipeline:
     """Simple pipeline using local models via Ollama and Whisper."""
 
-    def __init__(self, ollama_url: str = "http://localhost:11434", device: str | None = None) -> None:
+    def __init__(self, ollama_url: str = "http://localhost:11434", device: str | None = None,
+                 rag_db_path: str = "rag_db.pkl") -> None:
         self.ollama_url = ollama_url.rstrip("/")
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
         self.asr_model = whisper.load_model("small", device=self.device)
+        self.rag_db = RAGDatabase(rag_db_path)
 
-    def transcribe(self, audio: Union[str, bytes, np.ndarray, None]) -> str:
-        """Transcribe audio from a path or raw bytes."""
+    def transcribe(self, audio: Union[str, bytes, np.ndarray, None], source_id: str | None = None) -> str:
+        """Transcribe audio from a path or raw bytes and cache the result."""
+        if source_id:
+            cached = self.rag_db.get_transcript(source_id)
+            if cached:
+                return cached
         if audio is None:
             return ""
         if isinstance(audio, (str, bytes)):
@@ -36,7 +44,10 @@ class LocalPipeline:
         else:
             input_data = audio
         result = self.asr_model.transcribe(input_data)
-        return result.get("text", "")
+        text = result.get("text", "")
+        if source_id:
+            self.rag_db.add_transcript(source_id, text)
+        return text
 
     def caption(self, image: Union[str, bytes, np.ndarray]) -> str:
         """Generate an image caption using the local VLM."""
@@ -69,11 +80,17 @@ class LocalPipeline:
         image_paths: list[str],
         fps: float | None = None,
         progress: gr.Progress | None = None,
+        source_id: str | None = None,
     ) -> list[dict]:
         """Caption images in batches of five frames and report progress.
 
         Returns a list of dicts ``{"time": float, "caption": str}``.
         """
+        if source_id:
+            cached = self.rag_db.get_captions(source_id)
+            if cached:
+                return cached
+
         captions: list[dict] = []
         total = len(image_paths)
         times: list[float] = []
@@ -118,6 +135,8 @@ class LocalPipeline:
                 progress((processed, total), desc=f"{processed}/{total} ETA {eta}s")
         if progress:
             progress((total, total), desc="Done")
+        if source_id:
+            self.rag_db.add_captions(source_id, captions)
         return captions
 
     def caption_realtime(
@@ -125,12 +144,18 @@ class LocalPipeline:
         video_path: str,
         target_fps: float = 4.0,
         min_fps: float = 2.0,
+        source_id: str | None = None,
     ) -> list[dict]:
         """Caption video frames in near real time using two threads.
 
         Frames are sampled according to ``target_fps`` and dropped if inference
         is slower than ``min_fps``. Batch size is always one for lowest latency.
         """
+        if source_id:
+            cached = self.rag_db.get_captions(source_id)
+            if cached:
+                return cached
+
         cap = cv2.VideoCapture(video_path)
         orig_fps = cap.get(cv2.CAP_PROP_FPS) or target_fps
         step = max(1, int(round(orig_fps / target_fps)))
@@ -172,6 +197,8 @@ class LocalPipeline:
         t2.start()
         t1.join()
         t2.join()
+        if source_id:
+            self.rag_db.add_captions(source_id, captions)
         return captions
 
     def rerank(self, query: str, docs: list[str]):
@@ -194,10 +221,20 @@ class LocalPipeline:
     def answer(
         self,
         question: str,
-        transcript: str,
+        transcript: str | None = None,
         captions: list[dict] | None = None,
+        source_id: str | None = None,
     ) -> str:
         """Generate an answer using RAG over the transcript and captions."""
+
+        if source_id:
+            if transcript is None:
+                transcript = self.rag_db.get_transcript(source_id)
+            if captions is None:
+                captions = self.rag_db.get_captions(source_id)
+
+        if transcript is None:
+            transcript = ""
 
         docs: list[str] = []
         # Split transcript into sentences for retrieval
