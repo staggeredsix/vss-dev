@@ -3,11 +3,13 @@ import pickle
 from typing import List, Dict, Any
 
 class RAGDatabase:
-    """Simple on-disk store for video transcripts and captions."""
 
-    def __init__(self, path: str = "rag_db.pkl") -> None:
+    """Simple on-disk store for a single video's transcript and captions."""
+
+    def __init__(self, path: str) -> None:
         self.path = path
-        self.data: Dict[str, Dict[str, Any]] = {}
+        self.data: Dict[str, Any] = {"transcript": "", "captions": []}
+
         if os.path.exists(self.path):
             with open(self.path, "rb") as f:
                 self.data = pickle.load(f)
@@ -17,24 +19,18 @@ class RAGDatabase:
         with open(self.path, "wb") as f:
             pickle.dump(self.data, f)
 
-    def add_transcript(self, video: str, transcript: str) -> None:
-        video = os.path.abspath(video)
-        entry = self.data.setdefault(video, {})
-        entry["transcript"] = transcript
+
+    def add_transcript(self, transcript: str) -> None:
+        self.data["transcript"] = transcript
         self.save()
 
-    def add_captions(self, video: str, captions: List[Dict[str, Any]]) -> None:
-        video = os.path.abspath(video)
-        entry = self.data.setdefault(video, {})
-        entry["captions"] = captions
+    def add_captions(self, captions: List[Dict[str, Any]]) -> None:
+        self.data["captions"] = captions
         self.save()
 
-    def get_transcript(self, video: str) -> str:
-        video = os.path.abspath(video)
-        entry = self.data.get(video, {})
-        return entry.get("transcript", "")
+    def get_transcript(self) -> str:
+        return self.data.get("transcript", "")
 
-    def get_captions(self, video: str) -> List[Dict[str, Any]]:
-        video = os.path.abspath(video)
-        entry = self.data.get(video, {})
-        return entry.get("captions", [])
+    def get_captions(self) -> List[Dict[str, Any]]:
+        return self.data.get("captions", [])
+
