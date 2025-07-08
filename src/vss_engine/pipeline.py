@@ -279,6 +279,7 @@ class LocalPipeline:
         return captions
 
     def rerank(self, query: str, docs: list[str]):
+        """Return documents sorted by relevance using a local reranker."""
         self.logger.debug("Reranking %d documents", len(docs))
         results = []
         for doc in docs:
@@ -300,7 +301,10 @@ class LocalPipeline:
         transcript: str | None = None,
         captions: list[dict] | None = None,
         source_id: str | None = None,
-    ) -> str:
+        *,
+        use_rerank: bool = True,
+        top_n: int = 3,
+    ) -> tuple[str, list[str]]:
         """Generate an answer using RAG over the transcript and captions."""
         self.logger.info("Answering question: %s", question)
 
@@ -317,7 +321,8 @@ class LocalPipeline:
 
         docs: list[str] = []
         if source_id:
-            docs = [doc for doc, _ in db.search(question, top_k=10)]
+            search_k = max(top_n, 10) if use_rerank else top_n
+            docs = [doc for doc, _ in db.search(question, top_k=search_k)]
         else:
             for sent in re.split(r"(?<=[.!?])\s+", transcript):
                 s = sent.strip()
@@ -330,8 +335,12 @@ class LocalPipeline:
                     ts = f"{mm:02d}:{ss:02d}"
                     docs.append(f"[{ts}] {c['caption']}")
 
-        ranked = self.rerank(question, docs)
-        context = "\n".join(doc for doc, _ in ranked[:5])
+        if use_rerank:
+            ranked = self.rerank(question, docs)
+            context_docs = [doc for doc, _ in ranked[:top_n]]
+        else:
+            context_docs = docs[:top_n]
+        context = "\n".join(context_docs)
 
         prompt = (
             f"Context from video:\n{context}\n\n"
@@ -345,7 +354,7 @@ class LocalPipeline:
                 "stream": False,
             }
         )
-        return resp.json().get("response", "")
+        return resp.json().get("response", ""), context_docs
 
 
 if __name__ == "__main__":

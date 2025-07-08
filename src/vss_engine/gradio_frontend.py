@@ -180,14 +180,16 @@ class GradioApp:
         )
         return self.transcript, caption
 
-    def answer(self, question, history):
+    def answer(self, question, history, use_rerank: bool):
 
         if not self.current_vid:
 
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": "Upload a video first."})
-            return history
-        response = self.pipeline.answer(question, source_id=self.current_vid)
+            return history, ""
+        response, context_docs = self.pipeline.answer(
+            question, source_id=self.current_vid, use_rerank=use_rerank
+        )
 
         ts_match = re.search(r"(\d{1,2}:\d{2})", response)
         if ts_match:
@@ -201,7 +203,7 @@ class GradioApp:
             response = response.replace(mmss, link)
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": response})
-        return history
+        return history, "\n".join(context_docs)
 
     def launch(self, share: bool = False):
         with gr.Blocks() as demo:
@@ -213,6 +215,8 @@ class GradioApp:
             caption_box = gr.Textbox(label="Caption")
             chatbot = gr.Chatbot(type="messages")
             question = gr.Textbox(label="Question")
+            use_rerank = gr.Checkbox(value=True, label="Use Reranking")
+            rag_box = gr.Textbox(label="RAG Context")
             send = gr.Button("Ask")
 
             video.upload(self.process_upload, inputs=video, outputs=[transcript_box, caption_box])
@@ -226,7 +230,11 @@ class GradioApp:
                 inputs=existing,
                 outputs=[video, transcript_box, caption_box],
             )
-            send.click(self.answer, inputs=[question, chatbot], outputs=chatbot)
+            send.click(
+                self.answer,
+                inputs=[question, chatbot, use_rerank],
+                outputs=[chatbot, rag_box],
+            )
         demo.queue().launch(server_name="0.0.0.0", share=share)
 
 
