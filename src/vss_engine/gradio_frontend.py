@@ -294,7 +294,7 @@ class GradioApp:
                 outputs=[video, transcript_box, caption_box],
             )
             send.click(self.answer, inputs=[question, chatbot], outputs=chatbot)
-        demo.queue().launch(share=share)
+        demo.queue().launch(server_name="0.0.0.0", share=share)
 
 
 def main():
