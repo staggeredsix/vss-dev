@@ -5,4 +5,5 @@ torchaudio
 git+https://github.com/openai/whisper.git
 gradio
 moviepy
+opencv-python
 

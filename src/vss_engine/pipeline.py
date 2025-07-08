@@ -4,25 +4,52 @@ import base64
 import time
 import re
 import gradio as gr
+import threading
+import queue
+from typing import Iterable, List, Dict, Optional, Union
+import cv2
+import numpy as np
+import torch
 
 
 class LocalPipeline:
     """Simple pipeline using local models via Ollama and Whisper."""
 
-    def __init__(self, ollama_url: str = "http://localhost:11434") -> None:
+    def __init__(self, ollama_url: str = "http://localhost:11434", device: str | None = None) -> None:
         self.ollama_url = ollama_url.rstrip("/")
-        self.asr_model = whisper.load_model("small")
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = device
+        self.asr_model = whisper.load_model("small", device=self.device)
 
-    def transcribe(self, audio_path: str | None) -> str:
-        if not audio_path:
+    def transcribe(self, audio: Union[str, bytes, np.ndarray, None]) -> str:
+        """Transcribe audio from a path or raw bytes."""
+        if audio is None:
             return ""
-        result = self.asr_model.transcribe(audio_path)
+        if isinstance(audio, (str, bytes)):
+            if isinstance(audio, str):
+                input_data = audio
+            else:
+                # raw 16-bit PCM mono at 16 kHz
+                array = np.frombuffer(audio, np.int16).astype(np.float32) / 32768.0
+                input_data = array
+        else:
+            input_data = audio
+        result = self.asr_model.transcribe(input_data)
         return result.get("text", "")
 
-    def caption(self, image_path: str) -> str:
+    def caption(self, image: Union[str, bytes, np.ndarray]) -> str:
         """Generate an image caption using the local VLM."""
-        with open(image_path, "rb") as img:
-            img_b64 = base64.b64encode(img.read()).decode()
+        if isinstance(image, str):
+            with open(image, "rb") as img:
+                img_b64 = base64.b64encode(img.read()).decode()
+        elif isinstance(image, bytes):
+            img_b64 = base64.b64encode(image).decode()
+        else:
+            success, buf = cv2.imencode(".jpg", image)
+            if not success:
+                return ""
+            img_b64 = base64.b64encode(buf.tobytes()).decode()
 
         resp = requests.post(
             f"{self.ollama_url}/api/generate",
@@ -91,6 +118,60 @@ class LocalPipeline:
                 progress((processed, total), desc=f"{processed}/{total} ETA {eta}s")
         if progress:
             progress((total, total), desc="Done")
+        return captions
+
+    def caption_realtime(
+        self,
+        video_path: str,
+        target_fps: float = 4.0,
+        min_fps: float = 2.0,
+    ) -> list[dict]:
+        """Caption video frames in near real time using two threads.
+
+        Frames are sampled according to ``target_fps`` and dropped if inference
+        is slower than ``min_fps``. Batch size is always one for lowest latency.
+        """
+        cap = cv2.VideoCapture(video_path)
+        orig_fps = cap.get(cv2.CAP_PROP_FPS) or target_fps
+        step = max(1, int(round(orig_fps / target_fps)))
+        frame_interval = 1.0 / target_fps
+        q: queue.Queue[Optional[bytes]] = queue.Queue(maxsize=1)
+        captions: list[dict] = []
+        start = time.time()
+
+        def capture_loop():
+            idx = 0
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                if idx % step == 0:
+                    success, buf = cv2.imencode(".jpg", frame)
+                    if success:
+                        try:
+                            q.put(buf.tobytes(), block=False)
+                        except queue.Full:
+                            pass  # drop frame
+                    time.sleep(frame_interval)
+                idx += 1
+            q.put(None)
+            cap.release()
+
+        def inference_loop():
+            while True:
+                item = q.get()
+                if item is None:
+                    break
+                caption = self.caption(item)
+                ts = time.time() - start
+                captions.append({"time": ts, "caption": caption})
+
+        t1 = threading.Thread(target=capture_loop)
+        t2 = threading.Thread(target=inference_loop)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
         return captions
 
     def rerank(self, query: str, docs: list[str]):
