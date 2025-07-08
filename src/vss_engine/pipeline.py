@@ -95,15 +95,30 @@ class LocalPipeline:
         return text
 
     def caption(self, image: Union[str, bytes, np.ndarray]) -> str:
-        """Generate an image caption using the local VLM."""
+        """Generate an image caption using the local VLM.
+
+        Regardless of the input format, the image is resized to 244x244 before
+        being sent to the model."""
         self.logger.debug("Captioning image")
+
+        frame: np.ndarray | None = None
         if isinstance(image, str):
-            with open(image, "rb") as img:
-                img_b64 = base64.b64encode(img.read()).decode()
+            frame = cv2.imread(image)
+            if frame is None:
+                with open(image, "rb") as img:
+                    data = img.read()
+                img_b64 = base64.b64encode(data).decode()
         elif isinstance(image, bytes):
-            img_b64 = base64.b64encode(image).decode()
+            arr = np.frombuffer(image, np.uint8)
+            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if frame is None:
+                img_b64 = base64.b64encode(image).decode()
         else:
-            success, buf = cv2.imencode(".jpg", image)
+            frame = image
+
+        if frame is not None:
+            frame = cv2.resize(frame, (244, 244))
+            success, buf = cv2.imencode(".jpg", frame)
             if not success:
                 return ""
             img_b64 = base64.b64encode(buf.tobytes()).decode()
@@ -145,8 +160,16 @@ class LocalPipeline:
             batch = image_paths[i : i + 5]
             images_b64 = []
             for p in batch:
-                with open(p, "rb") as img:
-                    images_b64.append(base64.b64encode(img.read()).decode())
+                frame = cv2.imread(p)
+                if frame is not None:
+                    frame = cv2.resize(frame, (244, 244))
+                    success, buf = cv2.imencode(".jpg", frame)
+                    if not success:
+                        continue
+                    images_b64.append(base64.b64encode(buf.tobytes()).decode())
+                else:
+                    with open(p, "rb") as img:
+                        images_b64.append(base64.b64encode(img.read()).decode())
             t0 = time.time()
             resp = self._post_generate(
                 {
@@ -228,6 +251,7 @@ class LocalPipeline:
                 if not ret:
                     break
                 if idx % step == 0:
+                    frame = cv2.resize(frame, (244, 244))
                     success, buf = cv2.imencode(".jpg", frame)
                     if success:
                         try:
@@ -256,7 +280,10 @@ class LocalPipeline:
                 remaining = max(total_to_process - processed, 0)
                 eta = int(avg * remaining)
                 if progress:
-                    progress((processed, total_to_process), desc=f"{processed}/{total_to_process} ETA {eta}s")
+                    progress(
+                        (processed, total_to_process),
+                        desc=f"{processed}/{total_to_process} ETA {eta}s",
+                    )
                 self.logger.info(
                     "Processed %d/%d frames (ETA %ds)",
                     processed,

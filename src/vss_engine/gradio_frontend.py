@@ -51,6 +51,28 @@ def extract_audio_bytes(video_path: str | os.PathLike) -> bytes | None:
     return proc.stdout
 
 
+def reencode_video(video_path: Path, size: int = 244) -> None:
+    """Reencode ``video_path`` in-place scaled to ``size`` square pixels."""
+    tmp = video_path.with_suffix(".tmp" + video_path.suffix)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-vf",
+            f"scale={size}:{size}",
+            "-c:a",
+            "copy",
+            str(tmp),
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    tmp.replace(video_path)
+
 
 def file_sha256(path: str | os.PathLike) -> str:
     """Return the sha256 hash of a file."""
@@ -119,11 +141,17 @@ class GradioApp:
                 stderr=subprocess.PIPE,
                 text=True,
             )
+            reencode_video(out_file)
         except subprocess.CalledProcessError as e:
             raise RuntimeError(e.stderr.strip() if e.stderr else str(e)) from e
 
         transcript, caption = self.process_upload(str(out_file), progress)
-        return gr.update(value=str(out_file)), transcript, caption, gr.update(choices=self._list_videos())
+        return (
+            gr.update(value=str(out_file)),
+            transcript,
+            caption,
+            gr.update(choices=self._list_videos()),
+        )
 
     def load_existing(self, file_name: str):
         vid_hash = None
@@ -155,6 +183,7 @@ class GradioApp:
         saved_path = self.video_dir / f"{vid_hash}{ext}"
         if not saved_path.exists():
             shutil.copy(video_file, saved_path)
+        reencode_video(saved_path)
 
         audio_bytes = extract_audio_bytes(saved_path)
         self.current_vid = vid_hash
@@ -219,7 +248,9 @@ class GradioApp:
             rag_box = gr.Textbox(label="RAG Context")
             send = gr.Button("Ask")
 
-            video.upload(self.process_upload, inputs=video, outputs=[transcript_box, caption_box])
+            video.upload(
+                self.process_upload, inputs=video, outputs=[transcript_box, caption_box]
+            )
             capture_btn.click(
                 self.process_stream,
                 inputs=url,
