@@ -3,6 +3,7 @@ import whisper
 import base64
 import time
 import re
+import json
 import gradio as gr
 import threading
 import queue
@@ -13,6 +14,7 @@ import numpy as np
 import torch
 import logging
 from sentence_transformers import CrossEncoder
+from jsonschema import validate, ValidationError
 
 
 import os
@@ -53,6 +55,9 @@ class LocalPipeline:
 
         self.rag_db_dir = rag_db_dir
         os.makedirs(self.rag_db_dir, exist_ok=True)
+        schema_path = os.path.join(os.path.dirname(__file__), "frame_schema.json")
+        with open(schema_path, "r", encoding="utf-8") as f:
+            self.frame_schema = json.load(f)
 
     def _post_generate(self, payload: dict) -> requests.Response:
         """Helper to send a generate request to Ollama with logging."""
@@ -72,6 +77,15 @@ class LocalPipeline:
         """Return the RAG database for a given source."""
         path = os.path.join(self.rag_db_dir, source_id)
         return RAGDatabase(path)
+
+    def _validate_frame(self, frame: dict) -> bool:
+        """Validate a frame dictionary against the JSON schema."""
+        try:
+            validate(frame, self.frame_schema)
+        except ValidationError as e:
+            self.logger.error("Invalid frame data: %s", e)
+            return False
+        return True
 
     def transcribe(
         self, audio: Union[str, bytes, np.ndarray, None], source_id: str | None = None
@@ -110,8 +124,8 @@ class LocalPipeline:
 
         return text
 
-    def caption(self, image: Union[str, bytes, np.ndarray]) -> str:
-        """Generate an image caption using the local VLM.
+    def caption(self, image: Union[str, bytes, np.ndarray], context: str = "") -> str:
+        """Generate a frame caption using the local VLM with optional context.
 
         Regardless of the input format, the image is resized to 244x244 before
         being sent to the model."""
@@ -139,10 +153,16 @@ class LocalPipeline:
                 return ""
             img_b64 = base64.b64encode(buf.tobytes()).decode()
 
+        prompt = (
+            "You are describing frames from a video. "
+            "Use the previous context to infer ongoing events.\n"
+            f"Previous captions: {context}\n"
+            "Describe the current frame in detail."
+        )
         resp = self._post_generate(
             {
                 "model": "llava:34b-v1.6",
-                "prompt": "Describe this image in detail, be concise but detailed and logical.",
+                "prompt": prompt,
                 "images": [img_b64],
                 "stream": False,
             }
@@ -173,6 +193,7 @@ class LocalPipeline:
         captions: list[dict] = []
         total = len(image_paths)
         times: list[float] = []
+        context_caps: list[str] = []
         for i in range(0, total, 5):
             batch = image_paths[i : i + 5]
             images_b64 = []
@@ -188,12 +209,17 @@ class LocalPipeline:
                     with open(p, "rb") as img:
                         images_b64.append(base64.b64encode(img.read()).decode())
             t0 = time.time()
+            context = " ".join(context_caps[-5:])
+            prompt = (
+                "You are describing frames from a video. "
+                "Use the previous context to infer ongoing events.\n"
+                f"Previous captions: {context}\n"
+                "Describe each frame in detail."
+            )
             resp = self._post_generate(
                 {
                     "model": "llava:34b-v1.6",
-                    "prompt": (
-                        "Describe each image in detail, be concise but detailed and logical."
-                    ),
+                    "prompt": prompt,
                     "images": images_b64,
                     "stream": False,
                 }
@@ -210,9 +236,10 @@ class LocalPipeline:
                     timestamp = frame_index / fps
                 else:
                     timestamp = 0.0
-                captions.append(
-                    {"frame": frame_index, "time": timestamp, "caption": cap}
-                )
+                frame_dict = {"frame": frame_index, "time": timestamp, "caption": cap}
+                if self._validate_frame(frame_dict):
+                    captions.append(frame_dict)
+                    context_caps.append(cap)
             if progress:
                 processed = min(i + len(batch), total)
                 avg = sum(times) / len(times)
@@ -230,18 +257,14 @@ class LocalPipeline:
     def caption_realtime(
         self,
         video_path: str,
-        target_fps: float = 4.0,
-        min_fps: float = 2.0,
         progress: gr.Progress | None = None,
         source_id: str | None = None,
     ) -> list[dict]:
-        """Caption video frames in near real time using two threads.
+        """Caption video frames without dropping frames.
 
-        Frames are sampled according to ``target_fps`` and dropped if inference
-        is slower than ``min_fps``. Batch size is always one for lowest latency.
-        Progress is reported via ``progress`` if provided. Returns a list of
-        ``FrameCaption`` dictionaries with ``frame``, ``time`` and ``caption``
-        fields.
+        A frame is processed every four frames from the input video. Progress is
+        reported via ``progress`` if provided. Returns a list of ``FrameCaption``
+        dictionaries validated against the schema.
         """
         self.logger.info("Realtime captioning %s", video_path)
         if source_id:
@@ -253,17 +276,16 @@ class LocalPipeline:
                 return cached
 
         cap = cv2.VideoCapture(video_path)
-        orig_fps = cap.get(cv2.CAP_PROP_FPS) or target_fps
+        orig_fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        step = max(1, int(round(orig_fps / target_fps)))
+        step = 4
         total_to_process = (total_frames + step - 1) // step if total_frames else 0
         self.logger.info("Total frames to process: %d", total_to_process)
-        frame_interval = 1.0 / target_fps
-        q: queue.Queue[Optional[tuple[int, float, bytes]]] = queue.Queue(maxsize=1)
+        q: queue.Queue[Optional[tuple[int, float, bytes]]] = queue.Queue()
         captions: list[dict] = []
-        start = time.time()
         times: list[float] = []
         processed = 0
+        context_caps: list[str] = []
 
         def capture_loop():
             idx = 0
@@ -272,15 +294,11 @@ class LocalPipeline:
                 if not ret:
                     break
                 if idx % step == 0:
-                    frame_ts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+                    frame_ts = idx / orig_fps if orig_fps else 0.0
                     frame = cv2.resize(frame, (244, 244))
                     success, buf = cv2.imencode(".jpg", frame)
                     if success:
-                        try:
-                            q.put((idx, frame_ts, buf.tobytes()), block=False)
-                        except queue.Full:
-                            pass  # drop frame
-                    time.sleep(frame_interval)
+                        q.put((idx, frame_ts, buf.tobytes()))
                 idx += 1
             q.put(None)
             cap.release()
@@ -292,13 +310,16 @@ class LocalPipeline:
                 if item is None:
                     break
                 frame_idx, frame_ts, data = item
+                context = " ".join(context_caps[-5:])
                 t0 = time.time()
-                caption = self.caption(data)
+                caption = self.caption(data, context)
                 elapsed = time.time() - t0
                 times.append(elapsed)
                 processed += 1
-                ts = frame_ts if orig_fps else time.time() - start
-                captions.append({"frame": frame_idx, "time": ts, "caption": caption})
+                frame_dict = {"frame": frame_idx, "time": frame_ts, "caption": caption}
+                if self._validate_frame(frame_dict):
+                    captions.append(frame_dict)
+                    context_caps.append(caption)
                 avg = sum(times) / len(times)
                 remaining = max(total_to_process - processed, 0)
                 eta = int(avg * remaining)
@@ -373,10 +394,11 @@ class LocalPipeline:
                     docs.append(s)
             if captions:
                 for c in captions:
-                    mm = int(c["time"] // 60)
-                    ss = int(c["time"] % 60)
-                    ts = f"{mm:02d}:{ss:02d}"
-                    docs.append(f"[{ts}] {c['caption']}")
+                    if self._validate_frame(c):
+                        mm = int(c["time"] // 60)
+                        ss = int(c["time"] % 60)
+                        ts = f"{mm:02d}:{ss:02d}"
+                        docs.append(f"[{ts}] {c['caption']}")
 
         if use_rerank:
             ranked = self.rerank(question, docs)

@@ -7,4 +7,5 @@ gradio
 moviepy
 opencv-python
 sentence-transformers
+jsonschema
 
