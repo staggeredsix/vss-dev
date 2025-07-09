@@ -15,7 +15,8 @@
     },
     "caption": {
       "type": "string",
-      "description": "Description of the frame"
+      "description": "Description of the frame",
+      "minLength": 1
     }
   },
   "required": [
