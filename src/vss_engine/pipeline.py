@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 import torch
 import logging
+from sentence_transformers import CrossEncoder
 
 
 import os
@@ -34,6 +35,10 @@ class LocalPipeline:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
         self.asr_model = whisper.load_model("small", device=self.device)
+        # Lightweight cross-encoder for reranking
+        self.rerank_model = CrossEncoder(
+            "cross-encoder/ms-marco-MiniLM-L-6-v2", device=self.device
+        )
 
         self.rag_db_dir = rag_db_dir
         os.makedirs(self.rag_db_dir, exist_ok=True)
@@ -308,18 +313,11 @@ class LocalPipeline:
     def rerank(self, query: str, docs: list[str]):
         """Return documents sorted by relevance using a local reranker."""
         self.logger.debug("Reranking %d documents", len(docs))
-        results = []
-        for doc in docs:
-            prompt = f"Query: {query}\nDocument: {doc}\nScore 0-1:"
-            resp = self._post_generate(
-                {
-                    "model": "dengcao/Qwen3-Reranker-4B:Q4_K_M",
-                    "prompt": prompt,
-                    "stream": False,
-                }
-            )
-            score = float(resp.json().get("response", "0").strip())
-            results.append((doc, score))
+        if not docs:
+            return []
+        pairs = [(query, doc) for doc in docs]
+        scores = self.rerank_model.predict(pairs)
+        results = list(zip(docs, [float(s) for s in scores]))
         return sorted(results, key=lambda x: x[1], reverse=True)
 
     def answer(

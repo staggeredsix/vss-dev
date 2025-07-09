@@ -152,8 +152,6 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
 3. Pull models:
    ```bash
    ollama pull llava-llama3:8b
-   ollama pull dengcao/Qwen3-Reranker-8B:Q5_K_M
-
    ```
 
 4. Launch the Gradio interface (or use `run_local.sh`):
@@ -162,7 +160,7 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
    ```
    The interface now binds to `0.0.0.0` so it can be reached from other machines.
    Use `--share` to obtain a public Gradio link.
-   This uses Whisper for ASR, LLaVA for image captioning, and Qwen for reranking.
+   This uses Whisper for ASR, LLaVA for image captioning, and a lightweight cross-encoder for reranking.
    When the model response includes a timestamp, click it to jump to that time in the video.
 
    The interface stores transcripts and frame captions in a per-video RAG database under `data/db`,
