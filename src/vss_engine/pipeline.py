@@ -7,6 +7,7 @@ import gradio as gr
 import threading
 import queue
 from typing import Iterable, List, Dict, Optional, Union
+from dataclasses import dataclass
 import cv2
 import numpy as np
 import torch
@@ -16,7 +17,17 @@ from sentence_transformers import CrossEncoder
 
 import os
 
+
 from .rag_db import RAGDatabase
+
+
+@dataclass
+class FrameCaption:
+    """Description of a single video frame."""
+
+    frame: int
+    time: float
+    caption: str
 
 
 class LocalPipeline:
@@ -147,7 +158,8 @@ class LocalPipeline:
     ) -> list[dict]:
         """Caption images in batches of five frames and report progress.
 
-        Returns a list of dicts ``{"time": float, "caption": str}``.
+        Returns a list of ``FrameCaption`` dictionaries with ``frame``, ``time``
+        and ``caption`` fields.
         """
         self.logger.debug("Captioning %d frames", len(image_paths))
         if source_id:
@@ -198,7 +210,9 @@ class LocalPipeline:
                     timestamp = frame_index / fps
                 else:
                     timestamp = 0.0
-                captions.append({"time": timestamp, "caption": cap})
+                captions.append(
+                    {"frame": frame_index, "time": timestamp, "caption": cap}
+                )
             if progress:
                 processed = min(i + len(batch), total)
                 avg = sum(times) / len(times)
@@ -225,7 +239,9 @@ class LocalPipeline:
 
         Frames are sampled according to ``target_fps`` and dropped if inference
         is slower than ``min_fps``. Batch size is always one for lowest latency.
-        Progress is reported via ``progress`` if provided.
+        Progress is reported via ``progress`` if provided. Returns a list of
+        ``FrameCaption`` dictionaries with ``frame``, ``time`` and ``caption``
+        fields.
         """
         self.logger.info("Realtime captioning %s", video_path)
         if source_id:
@@ -243,7 +259,7 @@ class LocalPipeline:
         total_to_process = (total_frames + step - 1) // step if total_frames else 0
         self.logger.info("Total frames to process: %d", total_to_process)
         frame_interval = 1.0 / target_fps
-        q: queue.Queue[Optional[bytes]] = queue.Queue(maxsize=1)
+        q: queue.Queue[Optional[tuple[int, bytes]]] = queue.Queue(maxsize=1)
         captions: list[dict] = []
         start = time.time()
         times: list[float] = []
@@ -260,7 +276,7 @@ class LocalPipeline:
                     success, buf = cv2.imencode(".jpg", frame)
                     if success:
                         try:
-                            q.put(buf.tobytes(), block=False)
+                            q.put((idx, buf.tobytes()), block=False)
                         except queue.Full:
                             pass  # drop frame
                     time.sleep(frame_interval)
@@ -274,13 +290,14 @@ class LocalPipeline:
                 item = q.get()
                 if item is None:
                     break
+                frame_idx, data = item
                 t0 = time.time()
-                caption = self.caption(item)
+                caption = self.caption(data)
                 elapsed = time.time() - t0
                 times.append(elapsed)
                 processed += 1
-                ts = time.time() - start
-                captions.append({"time": ts, "caption": caption})
+                ts = frame_idx / orig_fps if orig_fps else time.time() - start
+                captions.append({"frame": frame_idx, "time": ts, "caption": caption})
                 avg = sum(times) / len(times)
                 remaining = max(total_to_process - processed, 0)
                 eta = int(avg * remaining)
