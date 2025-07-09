@@ -145,12 +145,14 @@ class GradioApp:
         except subprocess.CalledProcessError as e:
             raise RuntimeError(e.stderr.strip() if e.stderr else str(e)) from e
 
-        transcript, caption = self.process_upload(str(out_file), progress)
+        transcript, caption, dropdown_update = self.process_upload(
+            str(out_file), progress
+        )
         return (
             gr.update(value=str(out_file)),
             transcript,
             caption,
-            gr.update(choices=self._list_videos()),
+            dropdown_update,
         )
 
     def load_existing(self, file_name: str):
@@ -176,7 +178,7 @@ class GradioApp:
 
     def process_upload(self, video_file, progress=gr.Progress()):
         if video_file is None:
-            return "", ""
+            return "", "", gr.update(choices=self._list_videos())
         # save the uploaded file to the videos directory
         vid_hash = file_sha256(video_file)
         ext = Path(video_file).suffix
@@ -207,7 +209,11 @@ class GradioApp:
                 "captions": self.captions,
             },
         )
-        return self.transcript, caption
+        return (
+            self.transcript,
+            caption,
+            gr.update(choices=self._list_videos()),
+        )
 
     def answer(self, question, history, use_rerank: bool):
 
@@ -249,7 +255,9 @@ class GradioApp:
             send = gr.Button("Ask")
 
             video.upload(
-                self.process_upload, inputs=video, outputs=[transcript_box, caption_box]
+                self.process_upload,
+                inputs=video,
+                outputs=[transcript_box, caption_box, existing],
             )
             capture_btn.click(
                 self.process_stream,
