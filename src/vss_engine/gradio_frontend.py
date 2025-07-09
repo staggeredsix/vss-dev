@@ -191,10 +191,15 @@ class GradioApp:
         self.current_vid = vid_hash
         self.transcript = self.pipeline.transcribe(audio_bytes, source_id=vid_hash)
         progress((0, 0), desc="Processing frames")
-        fps = 4.0
+        # Process video frames with the local pipeline. The realtime caption
+        # method now controls frame sampling internally, so only the video path
+        # and progress callback are required.
         self.captions = self.pipeline.caption_realtime(
-            str(saved_path), target_fps=fps, progress=progress, source_id=vid_hash
+            str(saved_path), progress=progress, source_id=vid_hash
         )
+        # ``fps`` is kept for backwards compatibility with previously saved DB
+        # entries even though it is no longer used by the pipeline.
+        fps = 4.0
         self.fps = fps
         caption = self.captions[0]["caption"] if self.captions else ""
 
