@@ -130,7 +130,12 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
 
    ```
 
-2. Install and start Ollama:
+2. Install Python dependencies:
+   ```bash
+   pip3 install -r requirements.txt
+   ```
+
+3. Install and start Ollama:
    ```bash
    curl -fsSL https://ollama.com/install.sh | sh
    ollama serve &
@@ -149,12 +154,12 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
  This helper installs the required PyTorch build and Whisper, starts Ollama on port 51234, pulls models, and launches the Gradio interface. Use `-p` to share the Gradio interface publicly.
 
 
-3. Pull models:
+4. Pull models:
    ```bash
    ollama pull llava-llama3:8b
    ```
 
-4. Launch the Gradio interface (or use `run_local.sh`):
+5. Launch the Gradio interface (or use `run_local.sh`):
    ```bash
    python src/vss_engine/gradio_frontend.py
    ```
