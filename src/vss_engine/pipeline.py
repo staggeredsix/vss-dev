@@ -259,7 +259,7 @@ class LocalPipeline:
         total_to_process = (total_frames + step - 1) // step if total_frames else 0
         self.logger.info("Total frames to process: %d", total_to_process)
         frame_interval = 1.0 / target_fps
-        q: queue.Queue[Optional[tuple[int, bytes]]] = queue.Queue(maxsize=1)
+        q: queue.Queue[Optional[tuple[int, float, bytes]]] = queue.Queue(maxsize=1)
         captions: list[dict] = []
         start = time.time()
         times: list[float] = []
@@ -272,11 +272,12 @@ class LocalPipeline:
                 if not ret:
                     break
                 if idx % step == 0:
+                    frame_ts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
                     frame = cv2.resize(frame, (244, 244))
                     success, buf = cv2.imencode(".jpg", frame)
                     if success:
                         try:
-                            q.put((idx, buf.tobytes()), block=False)
+                            q.put((idx, frame_ts, buf.tobytes()), block=False)
                         except queue.Full:
                             pass  # drop frame
                     time.sleep(frame_interval)
@@ -290,13 +291,13 @@ class LocalPipeline:
                 item = q.get()
                 if item is None:
                     break
-                frame_idx, data = item
+                frame_idx, frame_ts, data = item
                 t0 = time.time()
                 caption = self.caption(data)
                 elapsed = time.time() - t0
                 times.append(elapsed)
                 processed += 1
-                ts = frame_idx / orig_fps if orig_fps else time.time() - start
+                ts = frame_ts if orig_fps else time.time() - start
                 captions.append({"frame": frame_idx, "time": ts, "caption": caption})
                 avg = sum(times) / len(times)
                 remaining = max(total_to_process - processed, 0)
