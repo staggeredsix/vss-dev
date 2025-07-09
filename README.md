@@ -164,8 +164,10 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
    When the model response includes a timestamp, click it to jump to that time in the video.
 
    The interface stores transcripts and frame captions in a per-video RAG database under `data/db`,
+   using a JSON structure with `frame`, `time`, and `caption` fields so each
+   frame can be referenced by timestamp.
 
-   so repeated questions do not re-run inference over the same video.
+   Repeated questions do not re-run inference over the same video.
 
 ## Known CVEs
 
@@ -187,5 +189,4 @@ VSS Engine 2.3.0 Source Code has the following known CVEs:
 | [CVE-2024-38459](https://github.com/advisories/GHSA-wmvm-9vqv-5qpp) | This issue is reported for langchain-milvus 0.1.5 dependency on older langchain version 0.1.5. However, VSS explicitly uses langchain 0.3.3 and hence is not applicable. |
 	
 ## License
-The software and materials in this repository are governed by the [NVIDIA Software License Agreement](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/) and the Product-Specific Terms for [NVIDIA AI Products](https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/); except for models which are governed by the [NVIDIA Community Model License](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-community-models-license/).
-ADDITIONAL INFORMATION: [Llama 3.1 Community License Agreement](https://www.llama.com/llama3_1/license/) for Llama-3.1-70b-instruct; [Llama 3.2 Community License Agreement](https://www.llama.com/llama3_2/license/) for NVIDIA Retrieval QA Llama 3.2 1B Embedding v2 and NVIDIA Retrieval QA Llama 3.2 1B Reranking v2, Apache, Version 2.0 for https://github.com/google-research/big_vision/blob/main/LICENSE and Apache License, Version 2.0 for https://github.com/01-ai/Yi/blob/main/LICENSE. Built with Llama.
+The software and materials in this repository are governed by the [NVIDIA Software License Agreement](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/) and the Product-Specific Terms for [NVIDIA AI Products](https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/); except for models which are governed by the [NVIDIA Community Model License](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-community-models-license/).ADDITIONAL INFORMATION: [Llama 3.1 Community License Agreement](https://www.llama.com/llama3_1/license/) for Llama-3.1-70b-instruct; [Llama 3.2 Community License Agreement](https://www.llama.com/llama3_2/license/) for NVIDIA Retrieval QA Llama 3.2 1B Embedding v2 and NVIDIA Retrieval QA Llama 3.2 1B Reranking v2, Apache, Version 2.0 for https://github.com/google-research/big_vision/blob/main/LICENSE and Apache License, Version 2.0 for https://github.com/01-ai/Yi/blob/main/LICENSE. Built with Llama.
