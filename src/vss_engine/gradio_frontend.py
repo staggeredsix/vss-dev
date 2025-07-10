@@ -8,6 +8,11 @@ import logging
 
 import shutil
 
+try:
+    import imageio_ffmpeg  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    imageio_ffmpeg = None
+
 import subprocess
 import tempfile
 import numpy as np
@@ -21,14 +26,21 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from vss_engine.pipeline import LocalPipeline  # noqa: E402
 
 
+def _ffmpeg() -> str:
+    """Return path to ffmpeg executable with a fallback."""
+    path = shutil.which("ffmpeg")
+    if path:
+        return path
+    if imageio_ffmpeg is not None:
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    raise RuntimeError("ffmpeg is required but not installed")
+
 def extract_audio_bytes(video_path: str | os.PathLike) -> bytes | None:
     """Return raw 16 kHz mono PCM audio from a video without writing to disk."""
-    if not shutil.which("ffmpeg"):
-        raise RuntimeError("ffmpeg is required but not installed")
     video_path = os.fspath(video_path)
     proc = subprocess.run(
         [
-            "ffmpeg",
+            _ffmpeg(),
             "-i",
             video_path,
             "-vn",
@@ -45,6 +57,7 @@ def extract_audio_bytes(video_path: str | os.PathLike) -> bytes | None:
         check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        text=True,
     )
     if proc.returncode != 0:
         return None
@@ -54,23 +67,26 @@ def extract_audio_bytes(video_path: str | os.PathLike) -> bytes | None:
 def reencode_video(video_path: Path, size: int = 244) -> None:
     """Reencode ``video_path`` in-place scaled to ``size`` square pixels."""
     tmp = video_path.with_suffix(".tmp" + video_path.suffix)
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(video_path),
-            "-vf",
-            f"scale={size}:{size}",
-            "-c:a",
-            "copy",
-            str(tmp),
-        ],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    try:
+        subprocess.run(
+            [
+                _ffmpeg(),
+                "-y",
+                "-i",
+                str(video_path),
+                "-vf",
+                f"scale={size}:{size}",
+                "-c:a",
+                "copy",
+                str(tmp),
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(e.stderr.strip() if e.stderr else str(e)) from e
     tmp.replace(video_path)
 
 
@@ -128,7 +144,7 @@ class GradioApp:
         try:
             subprocess.run(
                 [
-                    "ffmpeg",
+                    _ffmpeg(),
                     "-y",
                     "-i",
                     url,

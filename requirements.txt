@@ -6,6 +6,7 @@ git+https://github.com/openai/whisper.git
 gradio
 moviepy
 opencv-python
+imageio-ffmpeg
 sentence-transformers
 jsonschema
 
