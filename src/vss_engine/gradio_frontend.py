@@ -27,13 +27,25 @@ from vss_engine.pipeline import LocalPipeline  # noqa: E402
 
 
 def _ffmpeg() -> str:
-    """Return path to ffmpeg executable with a fallback."""
+    """Return path to a working ffmpeg executable with a fallback."""
     path = shutil.which("ffmpeg")
     if path:
-        return path
+        try:
+            subprocess.run(
+                [path, "-version"],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            return path
+        except Exception:
+            pass
     if imageio_ffmpeg is not None:
         return imageio_ffmpeg.get_ffmpeg_exe()
-    raise RuntimeError("ffmpeg is required but not installed")
+    raise RuntimeError(
+        "ffmpeg is required but was not found. Install it or install the"
+        " imageio-ffmpeg Python package."
+    )
 
 def extract_audio_bytes(video_path: str | os.PathLike) -> bytes | None:
     """Return raw 16 kHz mono PCM audio from a video without writing to disk."""

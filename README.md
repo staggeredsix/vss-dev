@@ -125,6 +125,9 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
    ```bash
    # ffmpeg is required for audio and frame extraction
    sudo apt-get install ffmpeg  # or use brew on macOS
+   # If this is not available or fails to run, the Python package
+   # ``imageio-ffmpeg`` installed in the next step provides a
+   # portable ffmpeg binary.
    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
    pip3 install git+https://github.com/openai/whisper.git
 
