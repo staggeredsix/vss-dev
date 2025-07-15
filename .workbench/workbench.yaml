@@ -1,0 +1,15 @@
+version: 1
+metadata:
+  name: video-search-and-summarization
+  description: NVIDIA AI Workbench specification for running the VSS demo.
+image: nvcr.io/nvidia/pytorch:24.05-py3
+packages:
+  apt:
+    - ffmpeg
+  pip:
+    - torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+    - git+https://github.com/openai/whisper.git
+    - -r requirements.txt
+run:
+  workdir: /workspace/vss-dev
+  cmd: python src/vss_engine/gradio_frontend.py

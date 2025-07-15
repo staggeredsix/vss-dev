@@ -118,6 +118,13 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
 - NVIDIA GPU Operator v23.9 (Recommended minimum version)
 - Helm v3.x
 
+### NVIDIA AI Workbench
+
+To launch the demo quickly with [NVIDIA AI Workbench](https://developer.nvidia.com/ai-workbench),
+open this repository in Workbench. The provided
+`.workbench/workbench.yaml` specification installs the required dependencies and
+starts the Gradio interface automatically.
+
 ### Local Setup with Ollama + Whisper
 
 
