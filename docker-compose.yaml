@@ -1,0 +1,21 @@
+services:
+  vss:
+    build: .
+    image: aiw_project_image
+    container_name: aiw_project
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: python src/vss_engine/gradio_frontend.py
+    ports:
+      - "7860:7860"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    runtime: nvidia
