@@ -3,7 +3,8 @@ specMinorVersion: 2
 meta:
     name: test
     image: project-test
-    description: test
+    description: A proof of Concept build of VSS
+
     labels: []
     createdOn: "2025-07-15T19:30:35Z"
     defaultBranch: main
