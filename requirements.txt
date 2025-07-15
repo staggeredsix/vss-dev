@@ -10,3 +10,4 @@ imageio-ffmpeg
 sentence-transformers
 jsonschema
 
+jupyterlab

@@ -312,7 +312,7 @@ class GradioApp:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ollama-url", default="http://localhost:11434")
+    parser.add_argument("--ollama-url", default="http://ollama:11434")
     parser.add_argument(
         "--share",
         action="store_true",

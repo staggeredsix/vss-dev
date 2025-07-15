@@ -1,12 +1,21 @@
 version: "3.8"
 services:
+  workspace:
+    build: .
+    image: aiw_project_image
+    container_name: aiw_project
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: jupyter lab --allow-root --ip 0.0.0.0 --port 8888 --no-browser
+    ports:
+      - "8888:8888"
   ollama:
     image: ollama/ollama
     ports:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-    command: serve
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     deploy:
@@ -17,6 +26,5 @@ services:
               count: all
               capabilities: [gpu]
     runtime: nvidia
-
 volumes:
   ollama_data:
