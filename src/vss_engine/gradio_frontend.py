@@ -307,7 +307,7 @@ class GradioApp:
                 inputs=[question, chatbot, use_rerank],
                 outputs=[chatbot, rag_box],
             )
-        demo.queue().launch(server_name="0.0.0.0", share=share)
+        demo.queue().launch(server_name="0.0.0.0", server_port=7860, share=share)
 
 
 def main():

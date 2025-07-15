@@ -1,12 +1,14 @@
-version: "3.8"
 services:
-  ollama:
-    image: ollama/ollama
-    ports:
-      - "11434:11434"
+  vss:
+    build: .
+    image: aiw_project_image
+    container_name: aiw_project
     volumes:
-      - ollama_data:/root/.ollama
-    command: serve
+      - .:/app
+    working_dir: /app
+    command: python src/vss_engine/gradio_frontend.py
+    ports:
+      - "7860:7860"
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     deploy:
@@ -17,6 +19,3 @@ services:
               count: all
               capabilities: [gpu]
     runtime: nvidia
-
-volumes:
-  ollama_data:
