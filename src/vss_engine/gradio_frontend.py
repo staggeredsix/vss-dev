@@ -128,7 +128,13 @@ def load_db(db_dir: Path, vid_hash: str) -> dict | None:
 class GradioApp:
     def __init__(self, ollama_url: str, telemetry: Telemetry | None = None):
         self.telemetry = telemetry or Telemetry(os.environ.get("TELEMETRY_URL"))
-        self.pipeline = LocalPipeline(ollama_url, rag_db_dir="data/db", telemetry=self.telemetry)
+        asr_url = os.environ.get("ASR_URL")
+        self.pipeline = LocalPipeline(
+            ollama_url,
+            rag_db_dir="data/db",
+            telemetry=self.telemetry,
+            asr_url=asr_url,
+        )
         self.transcript = ""
         self.frames: list[str] = []
         self.captions: list[dict] = []
@@ -319,6 +325,11 @@ def main():
         default=os.environ.get("OLLAMA_URL", "http://localhost:11434"),
     )
     parser.add_argument(
+        "--asr-url",
+        default=os.environ.get("ASR_URL"),
+        help="URL of the ASR service. If not provided, Whisper runs locally.",
+    )
+    parser.add_argument(
         "--share",
         action="store_true",
         help="Share the Gradio interface publicly",
@@ -326,6 +337,8 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(level=os.environ.get("VSS_LOG_LEVEL", "INFO").upper())
     telem = Telemetry(os.environ.get("TELEMETRY_URL"))
+    if args.asr_url:
+        os.environ["ASR_URL"] = args.asr_url
     app = GradioApp(args.ollama_url, telemetry=telem)
     app.launch(share=args.share)
 

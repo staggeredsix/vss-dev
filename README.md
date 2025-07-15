@@ -158,11 +158,21 @@ Applications section of the Workbench UI.
    ```
 
 
-   Or run the helper script:
-  ```bash
- ./run_local.sh [-p]
-  ```
- This helper installs the required PyTorch build and Whisper, starts Ollama on port 51234, pulls models, and launches the Gradio interface. Use `-p` to share the Gradio interface publicly.
+Or run the helper script:
+```bash
+./run_local.sh [-p]
+```
+This helper installs the required PyTorch build and Whisper, starts Ollama on port 51234, pulls models, and launches the Gradio interface. Use `-p` to share the Gradio interface publicly.
+
+### Modular Compose Setup
+
+For a more modular deployment where each model runs in its own container run:
+
+```bash
+docker compose -f docker-compose.modular.yml up
+```
+
+This compose file launches separate services for Ollama, a Whisper based ASR server, and the Gradio frontend. The frontend communicates with the ASR service using the `ASR_URL` environment variable.
 
 
 4. Pull models:

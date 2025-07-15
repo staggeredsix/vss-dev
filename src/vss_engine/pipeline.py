@@ -42,6 +42,7 @@ class LocalPipeline:
         device: str | None = None,
         rag_db_dir: str = "data/db",
         telemetry: Telemetry | None = None,
+        asr_url: str | None = None,
     ) -> None:
 
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -50,7 +51,10 @@ class LocalPipeline:
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
-        self.asr_model = whisper.load_model("small", device=self.device)
+        self.asr_url = asr_url or os.environ.get("ASR_URL")
+        self.asr_model = None
+        if not self.asr_url:
+            self.asr_model = whisper.load_model("small", device=self.device)
         # Lightweight cross-encoder for reranking
         self.rerank_model = CrossEncoder(
             "cross-encoder/ms-marco-MiniLM-L-6-v2", device=self.device
@@ -115,18 +119,32 @@ class LocalPipeline:
         if isinstance(audio, (str, bytes)):
             if isinstance(audio, str):
                 input_data = audio
+                raw_bytes = open(audio, "rb").read()
             else:
                 # raw 16-bit PCM mono at 16 kHz
                 array = np.frombuffer(audio, np.int16).astype(np.float32) / 32768.0
                 input_data = array
+                raw_bytes = audio
         else:
             input_data = audio
-        t0 = time.time()
-        result = self.asr_model.transcribe(input_data)
-        elapsed = time.time() - t0
+            raw_bytes = audio.tobytes() if isinstance(audio, np.ndarray) else audio
+
+        if self.asr_url:
+            files = {"file": ("audio.pcm", raw_bytes)}
+            t0 = time.time()
+            resp = requests.post(f"{self.asr_url}/transcribe", files=files)
+            elapsed = time.time() - t0
+            resp.raise_for_status()
+            result = resp.json()
+            self.logger.info("Remote ASR finished in %.2fs", elapsed)
+        else:
+            t0 = time.time()
+            result = self.asr_model.transcribe(input_data)
+            elapsed = time.time() - t0
+            self.logger.info("Whisper transcription finished in %.2fs", elapsed)
+
         text = result.get("text", "")
         segments = result.get("segments", [])
-        self.logger.info("Whisper transcription finished in %.2fs", elapsed)
         if self.telemetry:
             self.telemetry.record("transcribe_end", source=source_id, elapsed=elapsed)
         if source_id:
