@@ -51,6 +51,22 @@ environment:
                 proxy:
                     trim_prefix: false
                 url_command: jupyter lab list | head -n 2 | tail -n 1 | cut -f1 -d' ' | grep -v 'Currently'
+            - name: gradio
+              type: custom
+              class: webapp
+              start_command: python src/vss_engine/gradio_frontend.py
+              health_check_command: '[ $(curl -o /dev/null -s -w "%{http_code}" http://localhost:7860) == "200" ]'
+              stop_command: pkill -f gradio_frontend.py
+              user_msg: ""
+              logfile_path: ""
+              timeout_seconds: 60
+              icon_url: ""
+              webapp_options:
+                autolaunch: true
+                port: "7860"
+                proxy:
+                    trim_prefix: false
+                url_command: echo http://localhost:7860
         programming_languages:
             - python3
         icon_url: https://workbench.download.nvidia.com/static/img/ai-workbench-icon-rectangle.jpg
