@@ -34,7 +34,7 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
-    command: python src/vss_engine/gradio_frontend.py
+    command: python3 src/vss_engine/gradio_frontend.py
     volumes:
       - ../../data:/app/data
     environment:

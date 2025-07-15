@@ -57,7 +57,7 @@ SHARE_ARG=""
 if [ "$PUBLIC" -eq 1 ]; then
   SHARE_ARG="--share"
 fi
-python src/vss_engine/gradio_frontend.py --ollama-url "http://localhost:${PORT}" $SHARE_ARG
+python3 src/vss_engine/gradio_frontend.py --ollama-url "http://localhost:${PORT}" $SHARE_ARG
 
 
 # Stop Ollama

@@ -16,5 +16,5 @@ applications:
     type: custom
     run:
       workdir: /workspace/vss-dev
-      cmd: python src/vss_engine/gradio_frontend.py
+      cmd: python3 src/vss_engine/gradio_frontend.py
       port: 7860
