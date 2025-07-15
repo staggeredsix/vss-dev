@@ -172,7 +172,7 @@ Applications section of the Workbench UI.
 
 5. Launch the Gradio interface (or use `run_local.sh`):
    ```bash
-   python src/vss_engine/gradio_frontend.py
+    python3 src/vss_engine/gradio_frontend.py
    ```
    The interface now binds to `0.0.0.0` so it can be reached from other machines.
    Use `--share` to obtain a public Gradio link.

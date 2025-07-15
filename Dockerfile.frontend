@@ -6,4 +6,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src src
 COPY telemetry.py telemetry.py
 ENV OLLAMA_URL=http://localhost:11434
-CMD ["python", "src/vss_engine/gradio_frontend.py"]
+CMD ["python3", "src/vss_engine/gradio_frontend.py"]
