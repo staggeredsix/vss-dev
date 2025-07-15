@@ -1,9 +1,9 @@
 specVersion: v2
 specMinorVersion: 2
 meta:
-    name: VSS Development Test
-    image: vss-dev-test
-    description: A proof of concept build for NVIDIA VSS without the NIM requirements.
+    name: vss-dev-open
+    image: project-test
+    description: A proof of Concept build of VSS
     labels: []
     createdOn: "2025-07-15T19:30:35Z"
     defaultBranch: main
@@ -82,12 +82,13 @@ environment:
         package_manager_environment:
             name: ""
             target: ""
-    compose_file_path: ""
+    compose_file_path: "docker-compose.yaml"
+
 execution:
     apps: []
     resources:
         gpu:
-            requested: 0
+            requested: 1
         sharedMemoryMB: 0
     secrets: []
     mounts:
