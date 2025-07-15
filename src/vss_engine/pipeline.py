@@ -38,7 +38,7 @@ class LocalPipeline:
 
     def __init__(
         self,
-        ollama_url: str = "http://localhost:11434",
+        ollama_url: str = "http://ollama:11434",
         device: str | None = None,
         rag_db_dir: str = "data/db",
         telemetry: Telemetry | None = None,
@@ -455,7 +455,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run local VSS pipeline")
     parser.add_argument(
         "--ollama-url",
-        default="http://localhost:11434",
+        default="http://ollama:11434",
         help="Base URL for Ollama server",
     )
     parser.add_argument("--audio", default="audio.wav", help="Path to audio file")

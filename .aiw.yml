@@ -1,6 +1,7 @@
 version: 1
 docker_compose_file: deploy/ai-workbench/docker-compose.yaml
 default_service: pipeline
+
 ui:
   type: gradio
   path: src/vss_engine/gradio_frontend.py
