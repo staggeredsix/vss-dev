@@ -1,9 +1,9 @@
 specVersion: v2
 specMinorVersion: 2
 meta:
-    name: test
-    image: project-test
-    description: test
+    name: VSS Development Test
+    image: vss-dev-test
+    description: A proof of concept build for NVIDIA VSS without the NIM requirements.
     labels: []
     createdOn: "2025-07-15T19:30:35Z"
     defaultBranch: main
