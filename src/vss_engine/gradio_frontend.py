@@ -24,6 +24,7 @@ import gradio as gr
 # Allow importing as a package when executed from repository root
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from vss_engine.pipeline import LocalPipeline  # noqa: E402
+from telemetry import Telemetry  # noqa: E402
 
 
 def _ffmpeg() -> str:
@@ -125,8 +126,9 @@ def load_db(db_dir: Path, vid_hash: str) -> dict | None:
 
 
 class GradioApp:
-    def __init__(self, ollama_url: str):
-        self.pipeline = LocalPipeline(ollama_url, rag_db_dir="data/db")
+    def __init__(self, ollama_url: str, telemetry: Telemetry | None = None):
+        self.telemetry = telemetry or Telemetry(os.environ.get("TELEMETRY_URL"))
+        self.pipeline = LocalPipeline(ollama_url, rag_db_dir="data/db", telemetry=self.telemetry)
         self.transcript = ""
         self.frames: list[str] = []
         self.captions: list[dict] = []
@@ -312,7 +314,10 @@ class GradioApp:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ollama-url", default="http://ollama:11434")
+    parser.add_argument(
+        "--ollama-url",
+        default=os.environ.get("OLLAMA_URL", "http://localhost:11434"),
+    )
     parser.add_argument(
         "--share",
         action="store_true",
@@ -320,7 +325,8 @@ def main():
     )
     args = parser.parse_args()
     logging.basicConfig(level=os.environ.get("VSS_LOG_LEVEL", "INFO").upper())
-    app = GradioApp(args.ollama_url)
+    telem = Telemetry(os.environ.get("TELEMETRY_URL"))
+    app = GradioApp(args.ollama_url, telemetry=telem)
     app.launch(share=args.share)
 
 

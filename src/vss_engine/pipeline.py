@@ -8,6 +8,7 @@ import gradio as gr
 import threading
 import queue
 from typing import Iterable, List, Dict, Optional, Union
+from telemetry import Telemetry
 from dataclasses import dataclass
 import cv2
 import numpy as np
@@ -40,9 +41,11 @@ class LocalPipeline:
         ollama_url: str = "http://ollama:11434",
         device: str | None = None,
         rag_db_dir: str = "data/db",
+        telemetry: Telemetry | None = None,
     ) -> None:
 
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.telemetry = telemetry
         self.ollama_url = ollama_url.rstrip("/")
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -66,10 +69,14 @@ class LocalPipeline:
         self.logger.debug(
             "Sending generate request to %s with model=%s", self.ollama_url, model
         )
+        if self.telemetry:
+            self.telemetry.record("generate_start", model=model)
         start = time.time()
         resp = requests.post(f"{self.ollama_url}/api/generate", json=payload)
         elapsed = time.time() - start
         self.logger.info("Model %s finished in %.2fs", model, elapsed)
+        if self.telemetry:
+            self.telemetry.record("generate_end", model=model, elapsed=elapsed)
         resp.raise_for_status()
         return resp
 
@@ -91,6 +98,8 @@ class LocalPipeline:
         self, audio: Union[str, bytes, np.ndarray, None], source_id: str | None = None
     ) -> str:
         """Transcribe audio from a path or raw bytes and cache the result."""
+        if self.telemetry:
+            self.telemetry.record("transcribe_start", source=source_id)
         self.logger.info(
             "Transcribing audio%s", f" for {source_id}" if source_id else ""
         )
@@ -118,6 +127,8 @@ class LocalPipeline:
         text = result.get("text", "")
         segments = result.get("segments", [])
         self.logger.info("Whisper transcription finished in %.2fs", elapsed)
+        if self.telemetry:
+            self.telemetry.record("transcribe_end", source=source_id, elapsed=elapsed)
         if source_id:
 
             db.add_transcript_segments(text, segments)
@@ -181,6 +192,8 @@ class LocalPipeline:
         Returns a list of ``FrameCaption`` dictionaries with ``frame``, ``time``
         and ``caption`` fields.
         """
+        if self.telemetry:
+            self.telemetry.record("caption_start", count=len(image_paths))
         self.logger.debug("Captioning %d frames", len(image_paths))
         if source_id:
 
@@ -251,6 +264,8 @@ class LocalPipeline:
         if source_id:
 
             db.add_captions(captions)
+        if self.telemetry:
+            self.telemetry.record("caption_end", count=len(image_paths))
 
         return captions
 
@@ -266,6 +281,8 @@ class LocalPipeline:
         reported via ``progress`` if provided. Returns a list of ``FrameCaption``
         dictionaries validated against the schema.
         """
+        if self.telemetry:
+            self.telemetry.record("realtime_caption_start", video=video_path)
         self.logger.info("Realtime captioning %s", video_path)
         if source_id:
 
@@ -346,6 +363,8 @@ class LocalPipeline:
         if source_id:
 
             db.add_captions(captions)
+        if self.telemetry:
+            self.telemetry.record("realtime_caption_end", frames=processed)
 
         return captions
 
@@ -370,6 +389,8 @@ class LocalPipeline:
         top_n: int = 3,
     ) -> tuple[str, list[str]]:
         """Generate an answer using RAG over the transcript and captions."""
+        if self.telemetry:
+            self.telemetry.record("answer_start")
         self.logger.info("Answering question: %s", question)
 
         if source_id:
@@ -421,7 +442,10 @@ class LocalPipeline:
                 "stream": False,
             }
         )
-        return resp.json().get("response", ""), context_docs
+        result = resp.json().get("response", "")
+        if self.telemetry:
+            self.telemetry.record("answer_end")
+        return result, context_docs
 
 
 if __name__ == "__main__":
@@ -438,7 +462,8 @@ if __name__ == "__main__":
     parser.add_argument("--image", default="frame.jpg", help="Path to image file")
     args = parser.parse_args()
 
-    pipe = LocalPipeline(args.ollama_url)
+    telem = Telemetry()
+    pipe = LocalPipeline(args.ollama_url, telemetry=telem)
     transcript = pipe.transcribe(args.audio)
     print("Transcript:", transcript)
 
