@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  telemetry:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.telemetry
+    ports:
+      - "8000:8000"
+    networks:
+      - aiw-net
+
+  ollama:
+    image: ollama/ollama
+    command: serve
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    runtime: nvidia
+    networks:
+      - aiw-net
+
+  pipeline:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    command: python src/vss_engine/gradio_frontend.py
+    volumes:
+      - ../../data:/app/data
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - TELEMETRY_URL=http://telemetry:8000
+      - NVIDIA_VISIBLE_DEVICES=all
+    depends_on:
+      - ollama
+      - telemetry
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    runtime: nvidia
+    networks:
+      - aiw-net
+
+volumes:
+  ollama_data:
+
+networks:
+  aiw-net:
+    external: true
