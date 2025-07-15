@@ -1,8 +1,7 @@
 __pycache__/
 *.pyc
+*.pyo
 .env
-.venv/
+*.log
 .git
-.project
-.workbench
 

@@ -1,6 +1,6 @@
 version: 1
 docker_compose_file: docker-compose.yaml
-default_service: vss
+default_service: workspace
 ui:
   type: gradio
   path: src/vss_engine/gradio_frontend.py
