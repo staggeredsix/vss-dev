@@ -122,10 +122,9 @@ The `/deploy/helm/` directory contains a `nvidia-blueprint-vss-2.3.0.tgz` file w
 
 To launch the demo quickly with [NVIDIA AI Workbench](https://developer.nvidia.com/ai-workbench),
 open this repository in Workbench. The provided
-`.workbench/workbench.yaml` specification installs the required dependencies and
-starts the Gradio interface automatically. For a container-per-service setup,
-use the compose file under `deploy/ai-workbench` and launch the `vss-frontend`
-image from the Workbench UI.
+`.workbench/workbench.yaml` specification installs the required dependencies.
+Gradio is configured as a managed application that can be started from the
+Applications section of the Workbench UI.
 
 ### Local Setup with Ollama + Whisper
 

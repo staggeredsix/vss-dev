@@ -10,6 +10,11 @@ packages:
     - torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
     - git+https://github.com/openai/whisper.git
     - -r requirements.txt
-run:
-  workdir: /workspace/vss-dev
-  cmd: python src/vss_engine/gradio_frontend.py
+applications:
+  - name: gradio
+    class: webapp
+    type: custom
+    run:
+      workdir: /workspace/vss-dev
+      cmd: python src/vss_engine/gradio_frontend.py
+      port: 7860
