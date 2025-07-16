@@ -129,11 +129,15 @@ class GradioApp:
     def __init__(self, ollama_url: str, telemetry: Telemetry | None = None):
         self.telemetry = telemetry or Telemetry(os.environ.get("TELEMETRY_URL"))
         asr_url = os.environ.get("ASR_URL")
+        reranker_url = os.environ.get("RERANKER_URL")
+        spec_url = os.environ.get("SPEC_URL")
         self.pipeline = LocalPipeline(
             ollama_url,
             rag_db_dir="data/db",
             telemetry=self.telemetry,
             asr_url=asr_url,
+            reranker_url=reranker_url,
+            spec_url=spec_url,
         )
         self.transcript = ""
         self.frames: list[str] = []

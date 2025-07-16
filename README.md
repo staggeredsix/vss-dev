@@ -126,10 +126,10 @@ open this repository in Workbench. The provided
 Gradio is configured as a managed application that can be started from the
 Applications section of the Workbench UI.
 
-### Local Setup with Ollama + Whisper
+### Local Setup with Ollama
 
 
-1. Install ffmpeg and PyTorch with CUDA 12.8 support, then Whisper from source:
+1. Install ffmpeg and PyTorch with CUDA 12.8 support:
    ```bash
    # ffmpeg is required for audio and frame extraction
    sudo apt-get install ffmpeg  # or use brew on macOS
@@ -137,8 +137,6 @@ Applications section of the Workbench UI.
    # ``imageio-ffmpeg`` installed in the next step provides a
    # portable ffmpeg binary.
    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-   pip3 install git+https://github.com/openai/whisper.git
-
    ```
 
 2. Install Python dependencies:
@@ -162,7 +160,7 @@ Or run the helper script:
 ```bash
 ./run_local.sh [-p]
 ```
-This helper installs the required PyTorch build and Whisper, starts Ollama on port 51234, pulls models, and launches the Gradio interface. Use `-p` to share the Gradio interface publicly.
+This helper installs the required PyTorch build, starts Ollama on port 51234, pulls models, and launches the Gradio interface. Use `-p` to share the Gradio interface publicly.
 
 ### Modular Compose Setup
 
@@ -172,7 +170,7 @@ For a more modular deployment where each model runs in its own container run:
 docker compose -f docker-compose.modular.yml up
 ```
 
-This compose file launches separate services for Ollama, a Whisper based ASR server, and the Gradio frontend. The frontend communicates with the ASR service using the `ASR_URL` environment variable.
+This compose file launches separate services for Ollama, an ASR server, a reranker, a speculative captioning service, and the Gradio frontend. The frontend communicates with these services using the `ASR_URL`, `RERANKER_URL`, and `SPEC_URL` environment variables.
 
 
 4. Pull models:
@@ -189,7 +187,7 @@ This compose file launches separate services for Ollama, a Whisper based ASR ser
    ```
    The interface now binds to `0.0.0.0` so it can be reached from other machines.
    Use `--share` to obtain a public Gradio link.
-   This uses Whisper for ASR, LLaVA for image captioning, and a lightweight cross-encoder for reranking.
+   ASR, image captioning, and reranking now run in their own containers.
    When the model response includes a timestamp, click it to jump to that time in the video.
 
    The interface stores transcripts and frame captions in a per-video RAG database under `data/db`,

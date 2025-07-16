@@ -19,9 +19,8 @@ while getopts "p" opt; do
 done
 shift $((OPTIND - 1))
 
-# Install PyTorch for GPUs using CUDA 12.8 and Whisper from source
+# Install PyTorch for GPUs using CUDA 12.8
 pip3 install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-pip3 install -q git+https://github.com/openai/whisper.git
 pip3 install -q sentence-transformers
 
 
