@@ -43,6 +43,7 @@ class LocalPipeline:
         rag_db_dir: str = "data/db",
         telemetry: Telemetry | None = None,
         asr_url: str | None = None,
+        draft_model: str = "llava:7b-v1.6",
     ) -> None:
 
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -53,6 +54,7 @@ class LocalPipeline:
         self.device = device
         self.asr_url = asr_url or os.environ.get("ASR_URL")
         self.asr_model = None
+        self.draft_model = draft_model
         if not self.asr_url:
             self.asr_model = whisper.load_model("small", device=self.device)
         # Lightweight cross-encoder for reranking
@@ -153,11 +155,81 @@ class LocalPipeline:
 
         return text
 
-    def caption(self, image: Union[str, bytes, np.ndarray], context: str = "") -> str:
+    def caption_speculative(
+        self, image: Union[str, bytes, np.ndarray], context: str = ""
+    ) -> str:
+        """Generate a caption using a draft model followed by refinement.
+
+        A small vision-language model first produces a draft caption. The
+        larger model then refines this draft, which reduces the number of
+        decoding steps required for the large model."""
+
+        self.logger.debug("Captioning image using speculative decoding")
+
+        frame: np.ndarray | None = None
+        if isinstance(image, str):
+            frame = cv2.imread(image)
+            if frame is None:
+                with open(image, "rb") as img:
+                    data = img.read()
+                img_b64 = base64.b64encode(data).decode()
+        elif isinstance(image, bytes):
+            arr = np.frombuffer(image, np.uint8)
+            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if frame is None:
+                img_b64 = base64.b64encode(image).decode()
+        else:
+            frame = image
+
+        if frame is not None:
+            frame = cv2.resize(frame, (244, 244))
+            success, buf = cv2.imencode(".jpg", frame)
+            if not success:
+                return ""
+            img_b64 = base64.b64encode(buf.tobytes()).decode()
+
+        draft_prompt = "Describe the frame in detail."
+        draft_resp = self._post_generate(
+            {
+                "model": self.draft_model,
+                "prompt": draft_prompt,
+                "images": [img_b64],
+                "stream": False,
+            }
+        )
+        draft = draft_resp.json().get("response", "")
+
+        prompt = (
+            "You are a vision-language model refining a draft caption from a "
+            "smaller model.\n"
+            f"Draft: {draft}\n"
+            f"Previous captions: {context}\n"
+            "Provide a final detailed caption for the current frame."
+        )
+        resp = self._post_generate(
+            {
+                "model": "llava:34b-v1.6",
+                "prompt": prompt,
+                "images": [img_b64],
+                "stream": False,
+            }
+        )
+        return resp.json().get("response", "")
+
+    def caption(
+        self,
+        image: Union[str, bytes, np.ndarray],
+        context: str = "",
+        *,
+        speculative: bool = False,
+    ) -> str:
         """Generate a frame caption using the local VLM with optional context.
 
-        Regardless of the input format, the image is resized to 244x244 before
-        being sent to the model."""
+        When ``speculative`` is ``True`` a smaller draft model is used first and
+        its output is refined by the larger model."""
+        if speculative:
+            return self.caption_speculative(image, context)
+
         self.logger.debug("Captioning image")
 
         frame: np.ndarray | None = None
@@ -347,7 +419,7 @@ class LocalPipeline:
                 frame_idx, frame_ts, data = item
                 context = " ".join(context_caps[-5:])
                 t0 = time.time()
-                caption = self.caption(data, context)
+                caption = self.caption(data, context, speculative=True)
                 elapsed = time.time() - t0
                 times.append(elapsed)
                 processed += 1
