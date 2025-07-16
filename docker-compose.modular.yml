@@ -23,6 +23,8 @@ services:
       dockerfile: Dockerfile.asr
     ports:
       - "8000:8000"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
     deploy:
       resources:
         reservations:
@@ -38,6 +40,8 @@ services:
       dockerfile: Dockerfile.reranker
     ports:
       - "8001:8001"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
     deploy:
       resources:
         reservations:
@@ -53,6 +57,8 @@ services:
       dockerfile: Dockerfile.spec
     ports:
       - "8002:8002"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
 
   frontend:
     build:
@@ -65,6 +71,7 @@ services:
       - ASR_URL=http://asr:8000
       - RERANKER_URL=http://reranker:8001
       - SPEC_URL=http://speculative:8002
+      - NVIDIA_VISIBLE_DEVICES=all
     volumes:
       - ./data:/app/data
     depends_on:

@@ -19,6 +19,9 @@ import numpy as np
 from pathlib import Path
 import sys
 
+# Assets from legacy UI
+LEGACY_ASSETS = Path(__file__).resolve().parent / "../vss-engine/src/client/assets"
+
 import gradio as gr
 
 # Allow importing as a package when executed from repository root
@@ -148,6 +151,16 @@ class GradioApp:
         self.db_dir = Path("data/db")
         self.video_dir.mkdir(parents=True, exist_ok=True)
         self.db_dir.mkdir(parents=True, exist_ok=True)
+
+        # Legacy UI assets
+        theme_json = LEGACY_ASSETS / "kaizen-theme.json"
+        css_file = LEGACY_ASSETS / "kaizen-theme.css"
+        app_bar_file = LEGACY_ASSETS / "app_bar.html"
+        self.theme = None
+        if theme_json.exists():
+            self.theme = gr.themes.Default().load(str(theme_json))
+        self.css = css_file.read_text() if css_file.exists() else ""
+        self.app_bar = app_bar_file.read_text() if app_bar_file.exists() else ""
 
     def _list_videos(self) -> list[str]:
         vids = []
@@ -286,7 +299,9 @@ class GradioApp:
         return history, "\n".join(context_docs)
 
     def launch(self, share: bool = False):
-        with gr.Blocks() as demo:
+        with gr.Blocks(theme=self.theme, css=self.css) as demo:
+            if self.app_bar:
+                gr.HTML(self.app_bar)
             video = gr.Video(label="Video", elem_id="video")
             url = gr.Textbox(label="Stream URL")
             capture_btn = gr.Button("Capture Stream")
