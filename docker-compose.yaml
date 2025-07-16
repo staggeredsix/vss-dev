@@ -6,6 +6,8 @@ services:
       dockerfile: Dockerfile.reranker
     ports:
       - "8001:8001"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
     deploy:
       resources:
         reservations:
@@ -20,6 +22,8 @@ services:
       dockerfile: Dockerfile.spec
     ports:
       - "8002:8002"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
   ollama:
     image: ollama/ollama
     ports:
