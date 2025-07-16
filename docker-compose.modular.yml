@@ -32,6 +32,28 @@ services:
               capabilities: [gpu]
     runtime: nvidia
 
+  reranker:
+    build:
+      context: .
+      dockerfile: Dockerfile.reranker
+    ports:
+      - "8001:8001"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    runtime: nvidia
+
+  speculative:
+    build:
+      context: .
+      dockerfile: Dockerfile.spec
+    ports:
+      - "8002:8002"
+
   frontend:
     build:
       context: .
@@ -41,11 +63,15 @@ services:
     environment:
       - OLLAMA_URL=http://ollama:11434
       - ASR_URL=http://asr:8000
+      - RERANKER_URL=http://reranker:8001
+      - SPEC_URL=http://speculative:8002
     volumes:
       - ./data:/app/data
     depends_on:
       - ollama
       - asr
+      - reranker
+      - speculative
     deploy:
       resources:
         reservations:

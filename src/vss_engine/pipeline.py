@@ -1,5 +1,4 @@
 import requests
-import whisper
 import base64
 import time
 import re
@@ -43,6 +42,8 @@ class LocalPipeline:
         rag_db_dir: str = "data/db",
         telemetry: Telemetry | None = None,
         asr_url: str | None = None,
+        reranker_url: str | None = None,
+        spec_url: str | None = None,
         draft_model: str = "llava:7b-v1.6",
     ) -> None:
 
@@ -53,14 +54,21 @@ class LocalPipeline:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
         self.asr_url = asr_url or os.environ.get("ASR_URL")
+        self.reranker_url = reranker_url or os.environ.get("RERANKER_URL")
+        self.spec_url = spec_url or os.environ.get("SPEC_URL")
         self.asr_model = None
         self.draft_model = draft_model
         if not self.asr_url:
+            import whisper
+
             self.asr_model = whisper.load_model("small", device=self.device)
-        # Lightweight cross-encoder for reranking
-        self.rerank_model = CrossEncoder(
-            "cross-encoder/ms-marco-MiniLM-L-6-v2", device=self.device
-        )
+        if not self.reranker_url:
+            # Lightweight cross-encoder for reranking
+            self.rerank_model = CrossEncoder(
+                "cross-encoder/ms-marco-MiniLM-L-6-v2", device=self.device
+            )
+        else:
+            self.rerank_model = None
 
         self.rag_db_dir = rag_db_dir
         os.makedirs(self.rag_db_dir, exist_ok=True)
@@ -187,6 +195,17 @@ class LocalPipeline:
             if not success:
                 return ""
             img_b64 = base64.b64encode(buf.tobytes()).decode()
+
+        if self.spec_url:
+            files = {"file": ("frame.jpg", base64.b64decode(img_b64))}
+            resp = requests.post(
+                f"{self.spec_url}/caption",
+                files=files,
+                data={"context": context},
+                timeout=60,
+            )
+            resp.raise_for_status()
+            return resp.json().get("caption", "")
 
         draft_prompt = "Describe the frame in detail."
         draft_resp = self._post_generate(
@@ -459,10 +478,19 @@ class LocalPipeline:
         return captions
 
     def rerank(self, query: str, docs: list[str]):
-        """Return documents sorted by relevance using a local reranker."""
+        """Return documents sorted by relevance using a local or remote reranker."""
         self.logger.debug("Reranking %d documents", len(docs))
         if not docs:
             return []
+        if self.reranker_url:
+            resp = requests.post(
+                f"{self.reranker_url}/rerank",
+                json={"query": query, "docs": docs},
+                timeout=60,
+            )
+            resp.raise_for_status()
+            results = resp.json().get("results", [])
+            return [(r["doc"], float(r["score"])) for r in results]
         pairs = [(query, doc) for doc in docs]
         scores = self.rerank_model.predict(pairs)
         results = list(zip(docs, [float(s) for s in scores]))

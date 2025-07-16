@@ -1,0 +1,5 @@
+FROM nvcr.io/nvidia/pytorch:24.05-py3
+WORKDIR /app
+RUN pip install --no-cache-dir fastapi uvicorn sentence-transformers
+COPY src/reranker_server.py .
+CMD ["uvicorn", "reranker_server:app", "--host", "0.0.0.0", "--port", "8001"]

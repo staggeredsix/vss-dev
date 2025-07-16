@@ -1,15 +1,25 @@
 version: "3.8"
 services:
-  workspace:
-    build: .
-    image: aiw_project_image
-    container_name: aiw_project
-    volumes:
-      - .:/app
-    working_dir: /app
-    command: jupyter lab --allow-root --ip 0.0.0.0 --port 8888 --no-browser
+  reranker:
+    build:
+      context: .
+      dockerfile: Dockerfile.reranker
     ports:
-      - "8888:8888"
+      - "8001:8001"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    runtime: nvidia
+  speculative:
+    build:
+      context: .
+      dockerfile: Dockerfile.spec
+    ports:
+      - "8002:8002"
   ollama:
     image: ollama/ollama
     ports:
