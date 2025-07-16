@@ -177,7 +177,10 @@ This compose file launches separate services for Ollama, a Whisper based ASR ser
 
 4. Pull models:
    ```bash
-   ollama pull llava-llama3:8b
+   # Large VLM
+   ollama pull llava:34b-v1.6
+   # Small draft model used for speculative decoding
+   ollama pull llava:7b-v1.6
    ```
 
 5. Launch the Gradio interface (or use `run_local.sh`):

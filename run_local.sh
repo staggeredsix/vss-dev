@@ -46,6 +46,7 @@ echo "Ollama running on port ${PORT}"
 # Pull required models
 
 ollama pull llava:34b-v1.6
+ollama pull llava:7b-v1.6
 ollama pull dengcao/Qwen3-Reranker-4B:Q4_K_M
 
 # Warm up llava model
