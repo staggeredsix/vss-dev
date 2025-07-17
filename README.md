@@ -129,10 +129,11 @@ Applications section of the Workbench UI.
 ### Local Setup with Ollama
 
 
-1. Install ffmpeg and PyTorch with CUDA 12.8 support:
+1. Install ffmpeg, OpenCV system libraries, and PyTorch with CUDA 12.8 support:
    ```bash
    # ffmpeg is required for audio and frame extraction
-   sudo apt-get install ffmpeg  # or use brew on macOS
+   # libgl1 and libglib2.0-0 are required by the OpenCV Python package
+   sudo apt-get install ffmpeg libgl1 libglib2.0-0  # or use brew on macOS
    # If this is not available or fails to run, the Python package
    # ``imageio-ffmpeg`` installed in the next step provides a
    # portable ffmpeg binary.
@@ -194,7 +195,17 @@ This compose file launches separate services for Ollama, an ASR server, a rerank
    using a JSON structure with `frame`, `time`, and `caption` fields so each
    frame can be referenced by timestamp.
 
-   Repeated questions do not re-run inference over the same video.
+Repeated questions do not re-run inference over the same video.
+
+### Troubleshooting
+
+If the Gradio frontend fails with `ImportError: libGL.so.1`, the OpenCV Python
+package is missing its system dependencies. Install them with:
+
+```bash
+sudo apt-get install libgl1 libglib2.0-0
+```
+Then rebuild any Docker images or restart your environment.
 
 ## Known CVEs
 
