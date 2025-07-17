@@ -6,6 +6,8 @@ image: nvcr.io/nvidia/pytorch:24.05-py3
 packages:
   apt:
     - ffmpeg
+    - libgl1
+    - libglib2.0-0
   pip:
     - torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
     - -r requirements.txt
