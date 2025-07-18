@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/pytorch:24.05-py3
+FROM --platform=linux/amd64 nvcr.io/nvidia/pytorch:24.05-py3
 WORKDIR /app
 COPY requirements.txt ./
 RUN apt-get update && apt-get install -y ffmpeg libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
