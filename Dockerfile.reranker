@@ -3,7 +3,9 @@
 # PyTorch images from Docker Hub provide tagged releases with the
 # desired framework version. We rely on the CUDA-enabled runtime
 # variant so GPU acceleration remains available when deployed.
-FROM --platform=linux/amd64 pytorch/pytorch:2.7.1-cuda12.6-cudnn9-runtime
+# Build the reranker image for ARM64 hosts to avoid exec format errors when
+# running on Apple Silicon or other ARM-based systems.
+FROM --platform=linux/arm64 pytorch/pytorch:2.7.1-cuda12.6-cudnn9-runtime
 WORKDIR /app
 RUN pip install --no-cache-dir fastapi uvicorn sentence-transformers
 COPY src/reranker_server.py .
