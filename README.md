@@ -153,6 +153,7 @@ Applications section of the Workbench UI.
 
    Or use Docker Compose:
    ```bash
+   # GPU-enabled compose file
    docker-compose up -d
    ```
 
